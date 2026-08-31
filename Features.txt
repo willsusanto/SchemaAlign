@@ -1,0 +1,24 @@
+Common files: #0
+- A standardized format used across all readers to store the table name, column names, length, type, and table relations
+
+File Source reader (#1)
+- Read mermaid ER diagrams from path supplied
+- Parse contents of the file
+- Build a list inside memory that tracks the column name, length, type, and relations, with the table name as the key
+
+Entities reader (#2)
+- Scan all .cs entity model files from path supplied
+- Parse contents of the file
+- Build a list inside memory that tracks the column name, length, type, and relations, with the table name as the key
+
+DB schema reader (#4)
+- Still contemplating: do we supply connection string so the tool can query directly and read the schema by itself, or do we require the user to output a schema information in a specified format? 
+- 
+
+Diff checker (#3)
+- Because we use #0 as the output for all source readers, we can directly compare all the sources.
+- Go through all entities on #1, then compare those against #2 contents (by key)
+- List out and remember all the differences in memory-- either deletion, addition, or type changes
+- After diff checking, output all the differences and show to user. User will confirm before the diff checker apply changes -> this is the crucial part. Because the changes can either be applied to the DB / code, we need to use an interface, then build 2 separate implementations based on where the changes want to be applied.
+
+

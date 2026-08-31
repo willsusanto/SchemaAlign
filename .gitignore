@@ -1,0 +1,80 @@
+## Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+## Visual Studio
+.vs/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.sln.docstates
+
+## Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+## JetBrains Rider / ReSharper
+.idea/
+*.DotSettings.user
+_ReSharper*/
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userprofile
+*.docstates
+
+## Test / Code Coverage results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.visualstudio.osx.public.signed.cache
+TestResults/
+*.coverage
+*.coveragexml
+coverage.*
+
+## NuGet Packages
+*.nupkg
+*.snupkg
+*.nuget.props
+*.nuget.targets
+.nuget/
+packages/
+
+## Environment / Secrets / Local settings
+.env
+.env.*
+!.env.example
+appsettings*.local.json
+appsettings.Development.local.json
+
+## OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+[Tt]humbs.db
+
+## Crash dumps and temporary files
+*.stackdump
+*.tmp
+*.temp
