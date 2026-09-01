@@ -53,16 +53,26 @@ public class CSharpEntityReader : ISchemaReader
 
     public DatabaseSchema ReadDirectory(string directoryPath, string searchPattern = "*.cs", SearchOption searchOption = SearchOption.AllDirectories)
     {
-        if (!Directory.Exists(directoryPath))
-        {
-            throw new DirectoryNotFoundException($"Directory not found: {directoryPath}");
-        }
+        return ReadDirectories(new[] { directoryPath }, searchPattern, searchOption);
+    }
 
-        var csFiles = Directory.GetFiles(directoryPath, searchPattern, searchOption)
-            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
-                     && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                     && !f.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}"))
-            .ToList();
+    public DatabaseSchema ReadDirectories(IEnumerable<string> directoryPaths, string searchPattern = "*.cs", SearchOption searchOption = SearchOption.AllDirectories)
+    {
+        var csFiles = new List<string>();
+        foreach (var dir in directoryPaths)
+        {
+            if (!Directory.Exists(dir))
+            {
+                throw new DirectoryNotFoundException($"Directory not found: {dir}");
+            }
+
+            var files = Directory.GetFiles(dir, searchPattern, searchOption)
+                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                         && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                         && !f.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}"));
+
+            csFiles.AddRange(files);
+        }
 
         return ReadFiles(csFiles);
     }

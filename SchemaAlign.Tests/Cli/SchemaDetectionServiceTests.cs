@@ -77,6 +77,7 @@ public class SchemaDetectionServiceTests : IDisposable
     [Theory]
     [InlineData("models.mmd", TargetType.Mermaid)]
     [InlineData("src/Entities", TargetType.CSharp)]
+    [InlineData("src/Entities;src/Base", TargetType.CSharp)]
     [InlineData("migration.sql", TargetType.SqlServerScript)]
     [InlineData("Server=localhost;Database=TestDb;Trusted_Connection=True;", TargetType.SqlServerDatabase)]
     public void DetectTargetType_IdentifiesExpectedTarget(string pathOrConn, TargetType expected)
@@ -85,5 +86,25 @@ public class SchemaDetectionServiceTests : IDisposable
         var targetType = service.DetectTargetType(pathOrConn);
 
         targetType.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task ReadSchemaAsync_WithSemicolonSeparatedDirectories_ScansAllFoldersAndResolvesInheritance()
+    {
+        var dir1 = Path.Combine(_testDir, "LibraryDB");
+        var dir2 = Path.Combine(_testDir, "Base");
+        Directory.CreateDirectory(dir1);
+        Directory.CreateDirectory(dir2);
+
+        File.WriteAllText(Path.Combine(dir2, "BaseItem.cs"), "public abstract class BaseItem { public int Id { get; set; } }");
+        File.WriteAllText(Path.Combine(dir1, "BookItem.cs"), "public class BookItem : BaseItem { public string Name { get; set; } }");
+
+        var service = new SchemaDetectionService();
+        var schema = await service.ReadSchemaAsync($"{dir1};{dir2}");
+
+        schema.Tables.Should().ContainKey("BookItem");
+        schema.Tables["BookItem"].Columns.Should().ContainKey("Id");
+        schema.Tables["BookItem"].Columns.Should().ContainKey("Name");
+        schema.Tables.Should().NotContainKey("BaseItem");
     }
 }

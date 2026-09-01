@@ -68,6 +68,68 @@ erDiagram
     }
 
     [Fact]
+    public async Task DiffCommand_MultiPathCSharpDirectoriesVsMermaid_RendersConsoleOutput()
+    {
+        // 1. Create base folder with BaseModel
+        var baseDir = Path.Combine(_testDir, "Base");
+        Directory.CreateDirectory(baseDir);
+        File.WriteAllText(Path.Combine(baseDir, "BaseModel.cs"), @"
+public abstract class BaseModel
+{
+    public int Id { get; set; }
+}
+");
+
+        // 2. Create target entities folder with CustomerTable
+        var entitiesDir = Path.Combine(_testDir, "Entities");
+        Directory.CreateDirectory(entitiesDir);
+        File.WriteAllText(Path.Combine(entitiesDir, "CustomerTable.cs"), @"
+public class CustomerTable : BaseModel
+{
+    public string Name { get; set; }
+}
+");
+
+        // 3. Create sibling DB folder that should be ignored
+        var siblingDir = Path.Combine(_testDir, "OtherDb");
+        Directory.CreateDirectory(siblingDir);
+        File.WriteAllText(Path.Combine(siblingDir, "OtherTable.cs"), @"
+public class OtherTable
+{
+    public int OtherId { get; set; }
+}
+");
+
+        // 4. Create desired mermaid file
+        var mermaidPath = Path.Combine(_testDir, "schema.mmd");
+        File.WriteAllText(mermaidPath, @"
+erDiagram
+    CustomerTable {
+        int Id PK
+        string Name ""100""
+        string Email ""150""
+    }
+");
+
+        var console = new TestConsole();
+        var handler = new DiffCommandHandler(new SchemaDetectionService(), console);
+
+        var exitCode = await handler.RunAsync(new DiffCommandOptions
+        {
+            Source = $"{entitiesDir};{baseDir}",
+            Target = mermaidPath,
+            Mode = "incremental",
+            Detailed = true
+        });
+
+        exitCode.Should().Be(0);
+        var output = console.Output;
+        output.Should().Contain("CustomerTable");
+        output.Should().Contain("Email");
+        output.Should().NotContain("OtherTable");
+    }
+
+    [Fact]
     public async Task InspectCommand_MermaidFile_RendersTableTree()
     {
         var mermaidPath = Path.Combine(_testDir, "schema.mmd");
