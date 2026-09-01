@@ -92,7 +92,11 @@ public static class TypeMapper
         precision = inPrecision;
         scale = inScale;
 
-        var cleanType = sqlType.Trim().ToLowerInvariant();
+        var cleanType = sqlType.Trim().ToLowerInvariant().Replace("[", "").Replace("]", "");
+        if (cleanType.StartsWith("sys."))
+        {
+            cleanType = cleanType.Substring(4);
+        }
         int? extractedFirstParam = null;
         int? extractedSecondParam = null;
         bool isMax = false;

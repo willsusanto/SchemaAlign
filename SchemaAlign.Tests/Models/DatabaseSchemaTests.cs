@@ -66,7 +66,7 @@ public class DatabaseSchemaTests
         var orders = new TableSchema { Name = "Orders" };
         orders.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
         orders.AddColumn(new ColumnSchema { Name = "UserId", Type = StandardType.Int, IsNullable = false });
-        
+
         var fk = new ForeignKeySchema
         {
             ConstraintName = "FK_Orders_Users_UserId",
