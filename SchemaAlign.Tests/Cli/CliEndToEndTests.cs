@@ -23,21 +23,9 @@ public class CliEndToEndTests : IDisposable
     }
 
     [Fact]
-    public async Task DiffCommand_MermaidVsCSharpDirectory_RendersConsoleOutput()
+    public async Task DiffCommand_CSharpDirectoryVsMermaid_RendersConsoleOutput()
     {
-        // 1. Create source mermaid file
-        var mermaidPath = Path.Combine(_testDir, "schema.mmd");
-        var mermaidContent = @"
-erDiagram
-    CustomerTable {
-        int Id PK
-        string Name ""100""
-        string Email ""150""
-    }
-";
-        File.WriteAllText(mermaidPath, mermaidContent);
-
-        // 2. Create target C# entity directory
+        // 1. Create current base C# entity directory
         var csDir = Path.Combine(_testDir, "Entities");
         Directory.CreateDirectory(csDir);
         var csContent = @"
@@ -49,14 +37,26 @@ public class CustomerTable
 ";
         File.WriteAllText(Path.Combine(csDir, "CustomerTable.cs"), csContent);
 
-        // 3. Execute diff command handler with TestConsole
+        // 2. Create desired target mermaid file
+        var mermaidPath = Path.Combine(_testDir, "schema.mmd");
+        var mermaidContent = @"
+erDiagram
+    CustomerTable {
+        int Id PK
+        string Name ""100""
+        string Email ""150""
+    }
+";
+        File.WriteAllText(mermaidPath, mermaidContent);
+
+        // 3. Execute diff command handler with TestConsole: Source = Current (C#), Target = Desired (Mermaid)
         var console = new TestConsole();
         var handler = new DiffCommandHandler(new SchemaDetectionService(), console);
 
         var exitCode = await handler.RunAsync(new DiffCommandOptions
         {
-            Source = mermaidPath,
-            Target = csDir,
+            Source = csDir,
+            Target = mermaidPath,
             Mode = "incremental",
             Detailed = true
         });

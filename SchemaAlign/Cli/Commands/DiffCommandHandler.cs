@@ -59,8 +59,8 @@ public class DiffCommandHandler
         var isSnapshot = string.Equals(options.Mode, "snapshot", StringComparison.OrdinalIgnoreCase);
         var diffOptions = isSnapshot ? SchemaDiffOptions.FullSnapshot : SchemaDiffOptions.Incremental;
 
-        // Diff is calculated from target (base) to source (desired)
-        var diff = SchemaDiffCalculator.Calculate(targetSchema, sourceSchema, diffOptions);
+        // Diff is calculated from source (current base) to target (desired state)
+        var diff = SchemaDiffCalculator.Calculate(sourceSchema, targetSchema, diffOptions);
 
         switch (options.Output.ToLowerInvariant())
         {

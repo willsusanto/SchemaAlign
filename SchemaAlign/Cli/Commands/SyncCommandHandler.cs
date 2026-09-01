@@ -51,7 +51,7 @@ public class SyncCommandHandler
             var sourceSchema = await _detectionService.ReadSchemaAsync(options.Source, cancellationToken);
             var targetSchema = await _detectionService.ReadSchemaAsync(options.Target, cancellationToken);
 
-            var targetType = options.TargetTypeOverride ?? _detectionService.DetectTargetType(options.Target);
+            var targetType = options.TargetTypeOverride ?? _detectionService.DetectTargetType(options.Source);
 
             return await ExecuteAsync(sourceSchema, targetSchema, options, targetType, cancellationToken);
         }
@@ -67,12 +67,12 @@ public class SyncCommandHandler
         var isSnapshot = string.Equals(options.Mode, "snapshot", StringComparison.OrdinalIgnoreCase);
         var diffOptions = isSnapshot ? SchemaDiffOptions.FullSnapshot : SchemaDiffOptions.Incremental;
 
-        // Calculate diff: Target (current) -> Source (desired)
-        var diff = SchemaDiffCalculator.Calculate(targetSchema, sourceSchema, diffOptions);
+        // Calculate diff: Source (current base) -> Target (desired state)
+        var diff = SchemaDiffCalculator.Calculate(sourceSchema, targetSchema, diffOptions);
 
         if (!diff.HasChanges)
         {
-            _console.MarkupLine("[green]✔ Target is already aligned with source. No changes needed.[/]");
+            _console.MarkupLine("[green]✔ Source schema is already aligned with target. No changes needed.[/]");
             return 0;
         }
 
@@ -118,7 +118,7 @@ public class SyncCommandHandler
 
         var applierOptions = new ApplierOptions
         {
-            TargetDirectory = options.Target,
+            TargetDirectory = options.Source,
             AllowDrops = options.AllowDrop,
             DryRun = options.DryRun
         };
@@ -136,7 +136,7 @@ public class SyncCommandHandler
         // Confirm
         if (!options.Yes)
         {
-            var confirmed = _console.Confirm("\n[bold]Apply these changes to target?[/]", defaultValue: false);
+            var confirmed = _console.Confirm("\n[bold]Apply these changes to source codebase?[/]", defaultValue: false);
             if (!confirmed)
             {
                 _console.MarkupLine("[grey]Sync cancelled by user.[/]");
@@ -145,7 +145,7 @@ public class SyncCommandHandler
         }
 
         // Apply
-        _console.MarkupLine("\n[bold blue]Applying changes to target...[/]");
+        _console.MarkupLine("\n[bold blue]Applying changes to source codebase...[/]");
         var result = await applier.ApplyAsync(diff, applierOptions, cancellationToken);
 
         if (result.Success)

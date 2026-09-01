@@ -48,14 +48,14 @@ public class WizardCommandHandler
             return await _inspectHandler.RunAsync(new InspectCommandOptions { Source = source }, cancellationToken);
         }
 
-        var srcPath = _console.Ask<string>("[bold]Enter Source schema path (Desired state, e.g. schema.mmd):[/]");
-        var tgtPath = _console.Ask<string>("[bold]Enter Target schema path (Existing state, e.g. ./src/Entities):[/]");
+        var srcPath = _console.Ask<string>("[bold]Enter Current/Base schema path (e.g. ./src/Entities or live DB):[/]");
+        var tgtPath = _console.Ask<string>("[bold]Enter Desired/Target schema path (e.g. schema.mmd or new spec):[/]");
 
         var modeChoice = _console.Prompt(
             new SelectionPrompt<string>()
                 .Title("[bold]Select diff mode:[/]")
-                .AddChoices("1. Incremental Mode (Recommended: Sprint diagram; preserves unmentioned tables)",
-                            "2. Full Snapshot Mode (Source is exact full truth; marks omitted tables as deleted)"));
+                .AddChoices("1. Incremental Mode (Recommended: Sprint diagram; preserves unmentioned tables in current codebase)",
+                            "2. Full Snapshot Mode (Target is exact full truth; marks tables omitted from target as deleted)"));
 
         var mode = modeChoice.StartsWith("1") ? "incremental" : "snapshot";
 

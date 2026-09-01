@@ -51,17 +51,17 @@ public class SyncWorkflowTests
         var registry = new ApplierRegistry();
         registry.Register(TargetType.CSharp, mockApplier);
 
-        var targetSchema = new DatabaseSchema();
-        var sourceSchema = new DatabaseSchema();
+        var sourceSchema = new DatabaseSchema(); // Current base
+        var targetSchema = new DatabaseSchema(); // Desired spec
         var newTable = new TableSchema { Name = "CustomerTable" };
         newTable.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
-        sourceSchema.AddTable(newTable);
+        targetSchema.AddTable(newTable);
 
         var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
         var options = new SyncCommandOptions
         {
-            Source = "schema.mmd",
-            Target = "Entities",
+            Source = "Entities",
+            Target = "schema.mmd",
             DryRun = true,
             Yes = true,
             Interactive = false
@@ -82,19 +82,19 @@ public class SyncWorkflowTests
         var registry = new ApplierRegistry();
         registry.Register(TargetType.CSharp, mockApplier);
 
-        var targetSchema = new DatabaseSchema();
+        var sourceSchema = new DatabaseSchema(); // Current base with old table
         var oldTable = new TableSchema { Name = "OldAuditTable" };
-        targetSchema.AddTable(oldTable);
+        sourceSchema.AddTable(oldTable);
 
-        var sourceSchema = new DatabaseSchema();
+        var targetSchema = new DatabaseSchema(); // Desired spec with new table
         var newTable = new TableSchema { Name = "NewTable" };
-        sourceSchema.AddTable(newTable);
+        targetSchema.AddTable(newTable);
 
         var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
         var options = new SyncCommandOptions
         {
-            Source = "schema.mmd",
-            Target = "Entities",
+            Source = "Entities",
+            Target = "schema.mmd",
             Mode = "snapshot",
             AllowDrop = false,
             DryRun = false,

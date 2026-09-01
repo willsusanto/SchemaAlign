@@ -33,6 +33,26 @@ public class CommandLineParsingTests
     }
 
     [Fact]
+    public async Task DiffCommand_ParsesFromAndToAliases()
+    {
+        DiffCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestDiffHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(diffHandler: mockHandler);
+        var exitCode = await root.Parse("diff --from ./Entities --to schema.mmd").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Source.Should().Be("./Entities");
+        capturedOptions.Target.Should().Be("schema.mmd");
+    }
+
+    [Fact]
     public async Task DiffCommand_ParsesSnapshotModeAndDetailedFlags()
     {
         DiffCommandOptions? capturedOptions = null;
