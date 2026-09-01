@@ -13,12 +13,12 @@ public interface ISchemaApplier
     string Name { get; }
 
     /// <summary>
-    /// Generates unified file diff previews for all changes required by the schema diff without modifying files on disk.
+    /// Generates unified file diff previews for all changes required by the schema diff without modifying files on disk or databases.
     /// </summary>
     Task<IReadOnlyList<FileDiffPreview>> PreviewAsync(SchemaDiff diff, ApplierOptions options, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Applies the schema diff to target files on disk, writing or modifying code.
+    /// Applies the schema diff to target files on disk or databases, writing code or executing migrations.
     /// </summary>
     Task<ApplierResult> ApplyAsync(SchemaDiff diff, ApplierOptions options, CancellationToken cancellationToken = default);
 }

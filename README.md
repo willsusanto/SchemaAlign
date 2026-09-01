@@ -12,6 +12,7 @@ Universal database and entity schema alignment tool for .NET. SchemaAlign parses
 - **Interactive Sync & Granular Checklist**: Multi-select prompt to toggle individual additions, modifications, and drop operations before applying changes.
 - **Destructive Change Safeguards**: Protects against accidental table and column drops unless explicitly enabled with `--allow-drop`.
 - **In-place Roslyn Entity Rewriter**: Updates existing C# entity classes while preserving custom methods, comments, and formatting.
+- **Idempotent SQL Server Migration Applier**: Generates guarded T-SQL DDL migration scripts (`.sql`) and applies schema updates directly against live SQL Server databases.
 
 ## CLI Usage
 
@@ -45,13 +46,13 @@ dotnet run --project SchemaAlign -- sync --source ./src/Entities --target ./docs
 ```
 
 **Options**:
-- `-s`, `--source` *(required)*: Path to current/base schema to be updated (supports semicolon/comma-separated multi-paths; updates apply to primary path). Aliases: `--from`, `--current`, `--base`.
+- `-s`, `--source` *(required)*: Path to current/base schema to be updated (`.cs`, entity directory or multi-paths, `.sql`, or database connection string; updates apply to primary path). Aliases: `--from`, `--current`, `--base`.
 - `-t`, `--target` *(required)*: Path to desired/target schema to align toward. Aliases: `--to`, `--desired`.
 - `-m`, `--mode`: Diff mode (`incremental` [default] or `snapshot`).
 - `-i`, `--interactive`: Run interactive checklist prompt to toggle individual changes (default: `true`).
 - `--allow-drop`: Allow destructive drops (`DROP TABLE`, `DROP COLUMN`) during synchronization.
 - `--no-drop`: Explicitly block destructive drops (default in automated mode).
-- `--dry-run`: Generate and preview unified diffs without modifying files on disk.
+- `--dry-run`: Generate and preview unified diffs without modifying files on disk or live databases.
 - `-y`, `--yes`: Apply changes non-interactively without confirmation prompt.
 - `--namespace`: Target C# namespace for generated entities (defaults to auto-detection from source files or `Entities`). Aliases: `--ns`.
 

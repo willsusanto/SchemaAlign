@@ -110,4 +110,48 @@ public class SyncWorkflowTests
         mockApplier.LastDiffApplied!.DeletedTables.Should().BeEmpty();
         mockApplier.LastDiffApplied!.AddedTables.Should().ContainSingle(t => t.TableName == "NewTable");
     }
+
+    [Fact]
+    public async Task ExecuteSync_WithRealSqlServerApplier_GeneratesMigrationFile()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "SchemaAlign_SyncSqlTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var console = new TestConsole();
+            var registry = new ApplierRegistry();
+
+            var sourceSchema = new DatabaseSchema();
+            var targetSchema = new DatabaseSchema();
+            var newTable = new TableSchema { Name = "Orders" };
+            newTable.AddColumn(new ColumnSchema { Name = "OrderId", Type = StandardType.BigInt, IsPrimaryKey = true, IsIdentity = true });
+            targetSchema.AddTable(newTable);
+
+            var sqlFile = Path.Combine(tempDir, "migration.sql");
+            var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
+            var options = new SyncCommandOptions
+            {
+                Source = sqlFile,
+                Target = "schema.mmd",
+                DryRun = false,
+                Yes = true,
+                Interactive = false
+            };
+
+            var exitCode = await handler.ExecuteAsync(sourceSchema, targetSchema, options, TargetType.SqlServerScript);
+
+            exitCode.Should().Be(0);
+            File.Exists(sqlFile).Should().BeTrue();
+            var content = await File.ReadAllTextAsync(sqlFile);
+            content.Should().Contain("CREATE TABLE [dbo].[Orders]");
+            content.Should().Contain("[OrderId] BIGINT IDENTITY(1,1) NOT NULL");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                try { Directory.Delete(tempDir, true); } catch { }
+            }
+        }
+    }
 }
