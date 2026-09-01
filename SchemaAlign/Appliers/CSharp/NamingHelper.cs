@@ -3,8 +3,14 @@ using System.Text.RegularExpressions;
 
 namespace SchemaAlign.Appliers.CSharp;
 
+/// <summary>
+/// Utility helper for identifier casing, singularization, entity naming, and navigation property naming conventions.
+/// </summary>
 public static class NamingHelper
 {
+    /// <summary>
+    /// Converts a table or column name into PascalCase format (e.g. "order_items" -> "OrderItems").
+    /// </summary>
     public static string ToPascalCase(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -42,12 +48,18 @@ public static class NamingHelper
         return char.ToUpperInvariant(single[0]) + (single.Length > 1 ? single.Substring(1) : string.Empty);
     }
 
+    /// <summary>
+    /// Converts a table name into a singular PascalCase C# entity class name.
+    /// </summary>
     public static string ToEntityClassName(string tableName)
     {
         var pascal = ToPascalCase(tableName);
         return Singularize(pascal);
     }
 
+    /// <summary>
+    /// Singularizes a PascalCase English word using common plural suffix rules.
+    /// </summary>
     public static string Singularize(string word)
     {
         if (string.IsNullOrWhiteSpace(word) || word.Length <= 2)
@@ -88,6 +100,9 @@ public static class NamingHelper
         return word;
     }
 
+    /// <summary>
+    /// Derives an EF Core navigation property name from a foreign key column name and principal table name.
+    /// </summary>
     public static string ToNavigationPropertyName(string fkColumnName, string? principalTable = null)
     {
         if (string.IsNullOrWhiteSpace(fkColumnName))

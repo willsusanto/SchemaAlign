@@ -854,8 +854,8 @@ public class CSharpEntityApplierTests
     [Fact]
     public async Task GenerateEvidenceArtifact_EndToEndVerification()
     {
-        var evidenceDir = @"C:\Users\william.susanto\.no-mistakes\evidence\01M1DRZY5ET5KPJX0TECYCK067";
-        if (!Directory.Exists(evidenceDir))
+        var evidenceDir = GetEvidenceDirectory();
+        if (evidenceDir == null || !Directory.Exists(evidenceDir))
         {
             return;
         }
@@ -1172,6 +1172,23 @@ public class CSharpEntityApplierTests
                 Directory.Delete(tempDir, true);
             }
         }
+    }
+
+    private static string? GetEvidenceDirectory()
+    {
+        var targetDir = @"C:\Users\william.susanto\.no-mistakes\evidence\01M1DW87W3F6H07XSV7XVAPFBP";
+        if (Directory.Exists(targetDir)) return targetDir;
+        var baseDir = @"C:\Users\william.susanto\.no-mistakes\evidence";
+        if (Directory.Exists(baseDir))
+        {
+            var dirs = Directory.GetDirectories(baseDir);
+            if (dirs.Length > 0)
+            {
+                Array.Sort(dirs);
+                return dirs[^1];
+            }
+        }
+        return null;
     }
 }
 

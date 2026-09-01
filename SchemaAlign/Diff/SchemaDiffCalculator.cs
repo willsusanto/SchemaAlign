@@ -4,6 +4,14 @@ namespace SchemaAlign.Diff;
 
 public static class SchemaDiffCalculator
 {
+    /// <summary>
+    /// Calculates the difference between a source database schema and a target database schema.
+    /// By default, evaluates in incremental sprint mode (<see cref="SchemaDiffOptions.Incremental"/>).
+    /// </summary>
+    /// <param name="source">The base or existing database schema.</param>
+    /// <param name="target">The desired or target database schema (e.g. from Mermaid ERD or C# models).</param>
+    /// <param name="options">Options controlling diff calculation behavior (defaults to <see cref="SchemaDiffOptions.Incremental"/>).</param>
+    /// <returns>A <see cref="SchemaDiff"/> describing added, modified, deleted, and unchanged elements.</returns>
     public static SchemaDiff Calculate(DatabaseSchema source, DatabaseSchema target, SchemaDiffOptions? options = null)
     {
         options ??= SchemaDiffOptions.Incremental;

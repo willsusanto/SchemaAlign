@@ -4,20 +4,35 @@ using SchemaAlign.Models;
 
 namespace SchemaAlign.Appliers.CSharp;
 
+/// <summary>
+/// Schema applier for C# EF Core entities, supporting AST-based in-place updates, entity generation, and file diff previews.
+/// </summary>
 public class CSharpEntityApplier : ISchemaApplier
 {
+    /// <summary>
+    /// Gets the applier name ("CSharpEntityApplier").
+    /// </summary>
     public string Name => "CSharpEntityApplier";
 
+    /// <summary>
+    /// Applies a table diff to existing C# entity source code string in-place.
+    /// </summary>
     public string ApplyToSource(string sourceCode, TableDiff tableDiff, CSharpApplierOptions? options = null)
     {
         return CSharpEntityRewriter.Rewrite(sourceCode, tableDiff, options);
     }
 
+    /// <summary>
+    /// Generates full C# entity source code for a table schema.
+    /// </summary>
     public string GenerateEntitySource(TableSchema table, CSharpApplierOptions? options = null)
     {
         return CSharpEntityGenerator.Generate(table, options);
     }
 
+    /// <summary>
+    /// Generates file diff previews for all added, modified, or deleted entity files.
+    /// </summary>
     public async Task<IReadOnlyList<FileDiffPreview>> PreviewAsync(
         SchemaDiff diff,
         ApplierOptions options,
@@ -115,6 +130,9 @@ public class CSharpEntityApplier : ISchemaApplier
         return previews;
     }
 
+    /// <summary>
+    /// Applies the schema diff directly to C# entity files on disk.
+    /// </summary>
     public async Task<ApplierResult> ApplyAsync(
         SchemaDiff diff,
         ApplierOptions options,

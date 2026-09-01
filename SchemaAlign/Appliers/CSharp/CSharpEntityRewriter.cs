@@ -9,6 +9,9 @@ using SchemaAlign.Models.TypeMapping;
 
 namespace SchemaAlign.Appliers.CSharp;
 
+/// <summary>
+/// Roslyn C# syntax rewriter that updates existing entity classes in-place based on <see cref="TableDiff"/>, preserving comments, methods, and formatting.
+/// </summary>
 public class CSharpEntityRewriter : CSharpSyntaxRewriter
 {
     private readonly TableDiff _tableDiff;
@@ -16,6 +19,9 @@ public class CSharpEntityRewriter : CSharpSyntaxRewriter
     private bool _needsDataAnnotations;
     private bool _needsDataAnnotationsSchema;
 
+    /// <summary>
+    /// Indicates whether any modifications were made to the syntax tree during rewriting.
+    /// </summary>
     public bool HasModifications { get; private set; }
 
     public CSharpEntityRewriter(TableDiff tableDiff, CSharpApplierOptions? options = null)
@@ -24,6 +30,9 @@ public class CSharpEntityRewriter : CSharpSyntaxRewriter
         _options = options ?? new CSharpApplierOptions();
     }
 
+    /// <summary>
+    /// Rewrites source code in-place by applying property additions, modifications, and attribute changes matching the table diff.
+    /// </summary>
     public static string Rewrite(string sourceCode, TableDiff tableDiff, CSharpApplierOptions? options = null)
     {
         var syntaxTree = CSharpSyntaxTree.ParseText(sourceCode);

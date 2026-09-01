@@ -4,8 +4,14 @@ using SchemaAlign.Models.TypeMapping;
 
 namespace SchemaAlign.Appliers.CSharp;
 
+/// <summary>
+/// Generates C# entity class source code from a <see cref="TableSchema"/>.
+/// </summary>
 public static class CSharpEntityGenerator
 {
+    /// <summary>
+    /// Generates full C# source code for an entity class based on the given table schema and options.
+    /// </summary>
     public static string Generate(TableSchema table, CSharpApplierOptions? options = null)
     {
         options ??= new CSharpApplierOptions();

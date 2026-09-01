@@ -2,8 +2,18 @@ using System.Text;
 
 namespace SchemaAlign.Appliers.Diff;
 
+/// <summary>
+/// Generates standard unified diff format strings comparing original and modified text.
+/// </summary>
 public static class UnifiedDiffGenerator
 {
+    /// <summary>
+    /// Generates a standard unified diff string comparing originalText and modifiedText.
+    /// </summary>
+    /// <param name="originalText">The original file content, or null if adding a new file.</param>
+    /// <param name="modifiedText">The modified file content, or null if deleting a file.</param>
+    /// <param name="filePath">Relative or display file path for diff headers.</param>
+    /// <returns>A unified diff string with hunks and line prefixes ('+', '-', ' ').</returns>
     public static string GenerateDiff(string? originalText, string? modifiedText, string filePath)
     {
         var sb = new StringBuilder();
