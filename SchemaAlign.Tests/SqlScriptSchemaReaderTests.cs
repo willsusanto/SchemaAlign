@@ -476,4 +476,156 @@ CREATE TABLE [dbo].[TblDataTypes] (
         var schema = reader.Read("   ");
         schema.Tables.Should().BeEmpty();
     }
+
+    [Fact]
+    public void Read_MultipleAlterTablesInSingleBatchWithoutGo_ParsesAllStatements()
+    {
+        // Arrange
+        var sql = @"
+CREATE TABLE [dbo].[TblParent] (
+    [Id] INT PRIMARY KEY
+);
+CREATE TABLE [dbo].[TblChild] (
+    [Id] INT PRIMARY KEY,
+    [ParentId] INT NOT NULL
+);
+CREATE TABLE [dbo].[TblOther] (
+    [Id] INT PRIMARY KEY
+);
+
+ALTER TABLE [dbo].[TblChild] WITH CHECK ADD CONSTRAINT [FK_TblChild_TblParent] FOREIGN KEY([ParentId]) REFERENCES [dbo].[TblParent] ([Id]);
+ALTER TABLE [dbo].[TblOther] ADD [NewCol] NVARCHAR(100) NULL;
+";
+        var reader = new SqlScriptSchemaReader();
+
+        // Act
+        var schema = reader.Read(sql);
+
+        // Assert
+        var childTable = schema.FindTable("TblChild");
+        childTable.Should().NotBeNull();
+        childTable!.ForeignKeys.Should().HaveCount(1);
+        childTable.ForeignKeys[0].ConstraintName.Should().Be("FK_TblChild_TblParent");
+
+        var otherTable = schema.FindTable("TblOther");
+        otherTable.Should().NotBeNull();
+        otherTable!.Columns.Should().HaveCount(2);
+        var newCol = otherTable.FindColumn("NewCol");
+        newCol.Should().NotBeNull();
+        newCol!.Type.Should().Be(StandardType.String);
+        newCol.Length.Should().Be(100);
+    }
+
+    [Fact]
+    public void Read_MultipleExtendedPropertiesInSingleBatchWithoutGo_ParsesAllComments()
+    {
+        // Arrange
+        var sql = @"
+CREATE TABLE [dbo].[TblCustomer] (
+    [CustomerId] INT PRIMARY KEY,
+    [Email] NVARCHAR(100) NOT NULL
+);
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Customer entity table', @level0type=N'SCHEMA', @level0name=N'dbo', @level1type=N'TABLE', @level1name=N'TblCustomer';
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Customer primary email address', @level0type=N'SCHEMA', @level0name=N'dbo', @level1type=N'TABLE', @level1name=N'TblCustomer', @level2type=N'COLUMN', @level2name=N'Email';
+";
+        var reader = new SqlScriptSchemaReader();
+
+        // Act
+        var schema = reader.Read(sql);
+
+        // Assert
+        var table = schema.FindTable("TblCustomer");
+        table.Should().NotBeNull();
+        table!.Comment.Should().Be("Customer entity table");
+
+        var emailCol = table.FindColumn("Email");
+        emailCol.Should().NotBeNull();
+        emailCol!.Comment.Should().Be("Customer primary email address");
+    }
+
+    [Fact]
+    public void Read_BracketedDataTypes_MapsToStandardTypesWithPrecisionAndLength()
+    {
+        // Arrange
+        var sql = @"
+CREATE TABLE [dbo].[TblSsmsTypes] (
+    [Id] [int] IDENTITY(1,1) NOT NULL,
+    [Name] [nvarchar](50) NOT NULL,
+    [Price] [decimal](18, 2) NULL,
+    [CreatedAt] [datetime2](7) NOT NULL,
+    [Payload] [varbinary](max) NULL,
+    [Note] [sys].[nvarchar](100) NULL,
+    CONSTRAINT [PK_TblSsmsTypes] PRIMARY KEY ([Id])
+);";
+        var reader = new SqlScriptSchemaReader();
+
+        // Act
+        var schema = reader.Read(sql);
+
+        // Assert
+        var table = schema.FindTable("TblSsmsTypes");
+        table.Should().NotBeNull();
+
+        var idCol = table.FindColumn("Id");
+        idCol.Should().NotBeNull();
+        idCol!.Type.Should().Be(StandardType.Int);
+
+        var nameCol = table.FindColumn("Name");
+        nameCol.Should().NotBeNull();
+        nameCol!.Type.Should().Be(StandardType.String);
+        nameCol.Length.Should().Be(50);
+
+        var priceCol = table.FindColumn("Price");
+        priceCol.Should().NotBeNull();
+        priceCol!.Type.Should().Be(StandardType.Decimal);
+        priceCol.Precision.Should().Be(18);
+        priceCol.Scale.Should().Be(2);
+
+        var createdCol = table.FindColumn("CreatedAt");
+        createdCol.Should().NotBeNull();
+        createdCol!.Type.Should().Be(StandardType.DateTime);
+        createdCol.Precision.Should().Be(7);
+
+        var payloadCol = table.FindColumn("Payload");
+        payloadCol.Should().NotBeNull();
+        payloadCol!.Type.Should().Be(StandardType.ByteArray);
+        payloadCol.Length.Should().Be(-1);
+
+        var noteCol = table.FindColumn("Note");
+        noteCol.Should().NotBeNull();
+        noteCol!.Type.Should().Be(StandardType.String);
+        noteCol.Length.Should().Be(100);
+    }
+
+    [Fact]
+    public void Read_MultiPartQualifiedTableNames_CorrectlyExtractsSchemaAndTableName()
+    {
+        // Arrange
+        var sql = @"
+CREATE TABLE [MyDatabase].[dbo].[Orders] (
+    [OrderId] INT PRIMARY KEY
+);
+
+CREATE TABLE [MyServer].[MyDatabase].[sales].[OrderItems] (
+    [ItemId] INT PRIMARY KEY,
+    [OrderId] INT NOT NULL,
+    CONSTRAINT [FK_OrderItems_Orders] FOREIGN KEY ([OrderId]) REFERENCES [MyDatabase].[dbo].[Orders] ([OrderId])
+);";
+        var reader = new SqlScriptSchemaReader();
+
+        // Act
+        var schema = reader.Read(sql);
+
+        // Assert
+        var ordersTable = schema.FindTable("Orders");
+        ordersTable.Should().NotBeNull();
+        ordersTable!.Schema.Should().Be("dbo");
+
+        var itemsTable = schema.FindTable("OrderItems");
+        itemsTable.Should().NotBeNull();
+        itemsTable!.Schema.Should().Be("sales");
+        itemsTable.ForeignKeys.Should().HaveCount(1);
+        itemsTable.ForeignKeys[0].PrincipalTable.Should().Be("Orders");
+    }
 }

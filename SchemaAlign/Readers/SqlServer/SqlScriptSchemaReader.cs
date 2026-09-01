@@ -16,11 +16,11 @@ public class SqlScriptSchemaReader : ISchemaReader
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex AlterTableRegex = new(
-        @"ALTER\s+TABLE\s+([a-zA-Z0-9_\.\[\]""]+)(?:\s+WITH\s+(?:CHECK|NOCHECK))?\s+ADD\s+([\s\S]+)",
+        @"ALTER\s+TABLE\s+([a-zA-Z0-9_\.\[\]""]+)(?:\s+WITH\s+(?:CHECK|NOCHECK))?\s+ADD\s+([^;]+)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ExtendedPropertyRegex = new(
-        @"EXEC(?:UTE)?\s+(?:sys\.)?sp_(?:add|update)extendedproperty\s+([\s\S]+)",
+        @"EXEC(?:UTE)?\s+(?:sys\.)?sp_(?:add|update)extendedproperty\s+([^;]+)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex InlineFkRegex = new(
@@ -212,8 +212,14 @@ public class SqlScriptSchemaReader : ISchemaReader
             defaultValue = defMatch.Groups[1].Value.Trim();
         }
 
+        var normalizedType = rawType.Replace("[", "").Replace("]", "").Trim();
+        if (normalizedType.StartsWith("sys.", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedType = normalizedType.Substring(4);
+        }
+
         var standardType = TypeMapper.FromSqlServerType(
-            rawType, null, null, null,
+            normalizedType, null, null, null,
             out var length, out var precision, out var scale);
 
         var column = new ColumnSchema
@@ -717,7 +723,9 @@ public class SqlScriptSchemaReader : ISchemaReader
         var parts = cleaned.Split('.');
         if (parts.Length > 1)
         {
-            return (CleanIdentifier(parts[0]), CleanIdentifier(parts[1]));
+            var schema = CleanIdentifier(parts[^2]);
+            var table = CleanIdentifier(parts[^1]);
+            return (string.IsNullOrWhiteSpace(schema) ? "dbo" : schema, table);
         }
         return ("dbo", cleaned);
     }
