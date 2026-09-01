@@ -1,3 +1,6 @@
+using System.IO;
+using System.Text;
+using System.Text.Json;
 using AwesomeAssertions;
 using SchemaAlign.Diff;
 using SchemaAlign.Models;
@@ -258,6 +261,27 @@ public class SchemaDiffCalculatorTests
     }
 
     [Fact]
+    public void Calculate_ColumnCommentModified_ShouldFlagCommentChanged()
+    {
+        var source = new DatabaseSchema();
+        var target = new DatabaseSchema();
+
+        var tableSource = new TableSchema { Name = "Config" };
+        tableSource.AddColumn(new ColumnSchema { Name = "Setting", Type = StandardType.String, Comment = "Old doc" });
+        source.AddTable(tableSource);
+
+        var tableTarget = new TableSchema { Name = "Config" };
+        tableTarget.AddColumn(new ColumnSchema { Name = "Setting", Type = StandardType.String, Comment = "New doc" });
+        target.AddTable(tableTarget);
+
+        var diff = SchemaDiffCalculator.Calculate(source, target);
+        var colDiff = diff.FindTable("Config")!.Columns.First(c => c.ColumnName == "Setting");
+
+        colDiff.Kind.Should().Be(DiffKind.Modified);
+        colDiff.Changes.Should().Be(ChangeDetail.CommentChanged);
+    }
+
+    [Fact]
     public void Calculate_ColumnMultiFieldDiff_ShouldCombineFlags()
     {
         var source = new DatabaseSchema();
@@ -475,5 +499,227 @@ public class SchemaDiffCalculatorTests
         ordersDiff.AddedColumns.Should().ContainSingle(c => c.ColumnName == "NewCol");
         ordersDiff.DeletedColumns.Should().ContainSingle(c => c.ColumnName == "OldCol");
         ordersDiff.ModifiedColumns.Should().ContainSingle(c => c.ColumnName == "Total");
+    }
+
+    [Fact]
+    public void Calculate_EndToEnd_GeneratesComprehensiveReportAndValidatesAllFeatures()
+    {
+        // 1. Source Schema
+        var source = new DatabaseSchema();
+
+        var usersSource = new TableSchema { Name = "Users", Schema = "dbo" };
+        usersSource.AddColumn(new ColumnSchema { Name = "UserId", Type = StandardType.Int, IsPrimaryKey = true, IsIdentity = false });
+        usersSource.AddColumn(new ColumnSchema { Name = "Email", Type = StandardType.String, Length = 100, IsNullable = true });
+        usersSource.AddColumn(new ColumnSchema { Name = "Rating", Type = StandardType.Float });
+        usersSource.AddColumn(new ColumnSchema { Name = "IsActive", Type = StandardType.Boolean, DefaultValue = "0", Comment = "legacy" });
+        usersSource.AddColumn(new ColumnSchema { Name = "OldNotes", Type = StandardType.String, Length = 500 });
+        source.AddTable(usersSource);
+
+        var ordersSource = new TableSchema { Name = "Orders", Schema = "sales" };
+        ordersSource.AddColumn(new ColumnSchema { Name = "OrderId", Type = StandardType.Int, IsPrimaryKey = true });
+        ordersSource.AddColumn(new ColumnSchema { Name = "UserId", Type = StandardType.Int });
+        ordersSource.AddColumn(new ColumnSchema { Name = "StoreId", Type = StandardType.Int });
+        ordersSource.AddColumn(new ColumnSchema { Name = "ArchiveId", Type = StandardType.Int });
+        ordersSource.AddForeignKey(new ForeignKeySchema
+        {
+            ConstraintName = "FK_Orders_Users",
+            PrincipalTable = "Users",
+            PrincipalColumn = "UserId",
+            DependentTable = "Orders",
+            DependentColumn = "UserId",
+            Cardinality = ForeignKeyCardinality.ManyToOne
+        });
+        ordersSource.AddForeignKey(new ForeignKeySchema
+        {
+            ConstraintName = "FK_Orders_Archive",
+            PrincipalTable = "Archive",
+            PrincipalColumn = "Id",
+            DependentTable = "Orders",
+            DependentColumn = "ArchiveId",
+            Cardinality = ForeignKeyCardinality.ManyToOne
+        });
+        source.AddTable(ordersSource);
+
+        var auditSource = new TableSchema { Name = "AuditLogs", Schema = "dbo" };
+        auditSource.AddColumn(new ColumnSchema { Name = "LogId", Type = StandardType.BigInt, IsPrimaryKey = true });
+        auditSource.AddColumn(new ColumnSchema { Name = "Message", Type = StandardType.String });
+        source.AddTable(auditSource);
+
+        var settingsSource = new TableSchema { Name = "SystemSettings", Schema = "dbo" };
+        settingsSource.AddColumn(new ColumnSchema { Name = "Key", Type = StandardType.String, Length = 50, IsPrimaryKey = true });
+        settingsSource.AddColumn(new ColumnSchema { Name = "Value", Type = StandardType.String, Length = 250 });
+        source.AddTable(settingsSource);
+
+        // 2. Target Schema (Evolved)
+        var target = new DatabaseSchema();
+
+        var usersTarget = new TableSchema { Name = "USERS", Schema = "DBO" };
+        usersTarget.AddColumn(new ColumnSchema { Name = "USERID", Type = StandardType.Int, IsPrimaryKey = true, IsIdentity = true });
+        usersTarget.AddColumn(new ColumnSchema { Name = "EMAIL", Type = StandardType.String, Length = 255, IsNullable = false });
+        usersTarget.AddColumn(new ColumnSchema { Name = "RATING", Type = StandardType.Decimal, Precision = 5, Scale = 2 });
+        usersTarget.AddColumn(new ColumnSchema { Name = "ISACTIVE", Type = StandardType.Boolean, DefaultValue = "1", Comment = "active flag" });
+        usersTarget.AddColumn(new ColumnSchema { Name = "AvatarUrl", Type = StandardType.String, Length = 200 });
+        target.AddTable(usersTarget);
+
+        var ordersTarget = new TableSchema { Name = "orders", Schema = "sales" };
+        ordersTarget.AddColumn(new ColumnSchema { Name = "OrderId", Type = StandardType.Int, IsPrimaryKey = true });
+        ordersTarget.AddColumn(new ColumnSchema { Name = "UserId", Type = StandardType.Int });
+        ordersTarget.AddColumn(new ColumnSchema { Name = "StoreId", Type = StandardType.Int });
+        ordersTarget.AddColumn(new ColumnSchema { Name = "ArchiveId", Type = StandardType.Int });
+        ordersTarget.AddForeignKey(new ForeignKeySchema
+        {
+            ConstraintName = "FK_Orders_Users",
+            PrincipalTable = "Users",
+            PrincipalColumn = "UserId",
+            DependentTable = "Orders",
+            DependentColumn = "UserId",
+            Cardinality = ForeignKeyCardinality.OneToOne
+        });
+        ordersTarget.AddForeignKey(new ForeignKeySchema
+        {
+            ConstraintName = "FK_Orders_Stores",
+            PrincipalTable = "Stores",
+            PrincipalColumn = "StoreId",
+            DependentTable = "Orders",
+            DependentColumn = "StoreId",
+            Cardinality = ForeignKeyCardinality.ManyToOne
+        });
+        target.AddTable(ordersTarget);
+
+        var paymentsTarget = new TableSchema { Name = "Payments", Schema = "finance" };
+        paymentsTarget.AddColumn(new ColumnSchema { Name = "PaymentId", Type = StandardType.Guid, IsPrimaryKey = true });
+        paymentsTarget.AddColumn(new ColumnSchema { Name = "OrderId", Type = StandardType.Int, IsNullable = false });
+        paymentsTarget.AddColumn(new ColumnSchema { Name = "Amount", Type = StandardType.Decimal, Precision = 18, Scale = 2 });
+        paymentsTarget.AddForeignKey(new ForeignKeySchema
+        {
+            ConstraintName = "FK_Payments_Orders",
+            PrincipalTable = "Orders",
+            PrincipalColumn = "OrderId",
+            DependentTable = "Payments",
+            DependentColumn = "OrderId",
+            Cardinality = ForeignKeyCardinality.ManyToOne
+        });
+        target.AddTable(paymentsTarget);
+
+        var settingsTarget = new TableSchema { Name = "SystemSettings", Schema = "dbo" };
+        settingsTarget.AddColumn(new ColumnSchema { Name = "Key", Type = StandardType.String, Length = 50, IsPrimaryKey = true });
+        settingsTarget.AddColumn(new ColumnSchema { Name = "Value", Type = StandardType.String, Length = 250 });
+        target.AddTable(settingsTarget);
+
+        // 3. Calculate Diff
+        var diff = SchemaDiffCalculator.Calculate(source, target);
+
+        // 4. Assertions
+        diff.HasChanges.Should().BeTrue();
+        diff.Tables.Should().HaveCount(5);
+        diff.AddedTables.Should().ContainSingle(t => t.TableName == "Payments");
+        diff.DeletedTables.Should().ContainSingle(t => t.TableName == "AuditLogs");
+        diff.UnchangedTables.Should().ContainSingle(t => t.TableName == "SystemSettings");
+        diff.ModifiedTables.Should().HaveCount(2);
+
+        var userDiff = diff.FindTable("Users")!;
+        userDiff.Kind.Should().Be(DiffKind.Modified);
+        userDiff.AddedColumns.Should().ContainSingle(c => c.ColumnName == "AvatarUrl");
+        userDiff.DeletedColumns.Should().ContainSingle(c => c.ColumnName == "OldNotes");
+
+        var emailDiff = userDiff.Columns.First(c => string.Equals(c.ColumnName, "Email", StringComparison.OrdinalIgnoreCase));
+        emailDiff.Kind.Should().Be(DiffKind.Modified);
+        emailDiff.Changes.Should().HaveFlag(ChangeDetail.LengthChanged);
+        emailDiff.Changes.Should().HaveFlag(ChangeDetail.NullabilityChanged);
+
+        var ratingDiff = userDiff.Columns.First(c => string.Equals(c.ColumnName, "Rating", StringComparison.OrdinalIgnoreCase));
+        ratingDiff.Changes.Should().HaveFlag(ChangeDetail.TypeChanged);
+        ratingDiff.Changes.Should().HaveFlag(ChangeDetail.PrecisionChanged);
+        ratingDiff.Changes.Should().HaveFlag(ChangeDetail.ScaleChanged);
+
+        var activeDiff = userDiff.Columns.First(c => string.Equals(c.ColumnName, "IsActive", StringComparison.OrdinalIgnoreCase));
+        activeDiff.Changes.Should().HaveFlag(ChangeDetail.DefaultValueChanged);
+        activeDiff.Changes.Should().HaveFlag(ChangeDetail.CommentChanged);
+
+        var idDiff = userDiff.Columns.First(c => string.Equals(c.ColumnName, "UserId", StringComparison.OrdinalIgnoreCase));
+        idDiff.Changes.Should().HaveFlag(ChangeDetail.IdentityChanged);
+
+        var orderDiff = diff.FindTable("Orders")!;
+        orderDiff.Kind.Should().Be(DiffKind.Modified);
+        orderDiff.AddedForeignKeys.Should().ContainSingle(f => f.ConstraintName == "FK_Orders_Stores");
+        orderDiff.DeletedForeignKeys.Should().ContainSingle(f => f.ConstraintName == "FK_Orders_Archive");
+        orderDiff.ModifiedForeignKeys.Should().ContainSingle(f => f.ConstraintName == "FK_Orders_Users" && f.CardinalityChanged);
+
+        // 5. Generate Markdown and JSON Evidence Artifacts
+        var evidenceDir = @"C:\Users\william.susanto\.no-mistakes\evidence\01M1DQHBYCNH6BM8SP71F1K0TJ";
+        if (Directory.Exists(evidenceDir))
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("# Schema Diff Engine Validation Report");
+            sb.AppendLine();
+            sb.AppendLine("## Summary");
+            sb.AppendLine($"- **HasChanges**: `{diff.HasChanges}`");
+            sb.AppendLine($"- **Total Tables Analyzed**: {diff.Tables.Count}");
+            sb.AppendLine($"- **Added Tables**: {diff.AddedTables.Count()}");
+            sb.AppendLine($"- **Modified Tables**: {diff.ModifiedTables.Count()}");
+            sb.AppendLine($"- **Deleted Tables**: {diff.DeletedTables.Count()}");
+            sb.AppendLine($"- **Unchanged Tables**: {diff.UnchangedTables.Count()}");
+            sb.AppendLine();
+            sb.AppendLine("## Table Breakdown");
+            sb.AppendLine();
+
+            foreach (var table in diff.Tables)
+            {
+                sb.AppendLine($"### Table: `{table.Schema}.{table.TableName}` ({table.Kind})");
+                sb.AppendLine();
+
+                if (table.Columns.Count > 0)
+                {
+                    sb.AppendLine("#### Columns");
+                    sb.AppendLine("| Column | Kind | Changes | Source Type | Target Type |");
+                    sb.AppendLine("|---|---|---|---|---|");
+                    foreach (var col in table.Columns)
+                    {
+                        var srcType = col.Source != null ? $"{col.Source.Type}{(col.Source.Length.HasValue ? $"({col.Source.Length})" : "")}{(col.Source.IsNullable ? "?" : "")}" : "-";
+                        var tgtType = col.Target != null ? $"{col.Target.Type}{(col.Target.Length.HasValue ? $"({col.Target.Length})" : "")}{(col.Target.IsNullable ? "?" : "")}" : "-";
+                        sb.AppendLine($"| `{col.ColumnName}` | `{col.Kind}` | `{col.Changes}` | `{srcType}` | `{tgtType}` |");
+                    }
+                    sb.AppendLine();
+                }
+
+                if (table.ForeignKeys.Count > 0)
+                {
+                    sb.AppendLine("#### Foreign Keys");
+                    sb.AppendLine("| Constraint | Kind | Cardinality Changed | Source Ref | Target Ref |");
+                    sb.AppendLine("|---|---|---|---|---|");
+                    foreach (var fk in table.ForeignKeys)
+                    {
+                        var srcRef = fk.Source != null ? $"{fk.Source.DependentTable}.{fk.Source.DependentColumn} -> {fk.Source.PrincipalTable}.{fk.Source.PrincipalColumn} ({fk.Source.Cardinality})" : "-";
+                        var tgtRef = fk.Target != null ? $"{fk.Target.DependentTable}.{fk.Target.DependentColumn} -> {fk.Target.PrincipalTable}.{fk.Target.PrincipalColumn} ({fk.Target.Cardinality})" : "-";
+                        sb.AppendLine($"| `{fk.ConstraintName}` | `{fk.Kind}` | `{fk.CardinalityChanged}` | `{srcRef}` | `{tgtRef}` |");
+                    }
+                    sb.AppendLine();
+                }
+            }
+
+            File.WriteAllText(Path.Combine(evidenceDir, "schema_diff_report.md"), sb.ToString());
+
+            var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+            var jsonPayload = JsonSerializer.Serialize(new
+            {
+                diff.HasChanges,
+                TotalTables = diff.Tables.Count,
+                AddedTables = diff.AddedTables.Select(t => t.TableName).ToList(),
+                ModifiedTables = diff.ModifiedTables.Select(t => new
+                {
+                    t.TableName,
+                    AddedColumns = t.AddedColumns.Select(c => c.ColumnName).ToList(),
+                    DeletedColumns = t.DeletedColumns.Select(c => c.ColumnName).ToList(),
+                    ModifiedColumns = t.ModifiedColumns.Select(c => new { c.ColumnName, Changes = c.Changes.ToString() }).ToList(),
+                    AddedForeignKeys = t.AddedForeignKeys.Select(f => f.ConstraintName).ToList(),
+                    DeletedForeignKeys = t.DeletedForeignKeys.Select(f => f.ConstraintName).ToList(),
+                    ModifiedForeignKeys = t.ModifiedForeignKeys.Select(f => new { f.ConstraintName, f.CardinalityChanged }).ToList()
+                }).ToList(),
+                DeletedTables = diff.DeletedTables.Select(t => t.TableName).ToList(),
+                UnchangedTables = diff.UnchangedTables.Select(t => t.TableName).ToList()
+            }, jsonOptions);
+
+            File.WriteAllText(Path.Combine(evidenceDir, "schema_diff_report.json"), jsonPayload);
+        }
     }
 }
