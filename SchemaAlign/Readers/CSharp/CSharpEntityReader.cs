@@ -51,11 +51,25 @@ public class CSharpEntityReader : ISchemaReader
         return ReadSyntaxTrees(syntaxTrees);
     }
 
+    /// <summary>
+    /// Reads and parses C# entity classes from the specified directory.
+    /// </summary>
+    /// <param name="directoryPath">The directory containing C# source files.</param>
+    /// <param name="searchPattern">File search pattern (default: *.cs).</param>
+    /// <param name="searchOption">Search option (default: AllDirectories).</param>
+    /// <returns>A <see cref="DatabaseSchema"/> representing the parsed entity schema.</returns>
     public DatabaseSchema ReadDirectory(string directoryPath, string searchPattern = "*.cs", SearchOption searchOption = SearchOption.AllDirectories)
     {
         return ReadDirectories(new[] { directoryPath }, searchPattern, searchOption);
     }
 
+    /// <summary>
+    /// Reads and parses C# entity classes across multiple directories.
+    /// </summary>
+    /// <param name="directoryPaths">The directories containing C# source files.</param>
+    /// <param name="searchPattern">File search pattern (default: *.cs).</param>
+    /// <param name="searchOption">Search option (default: AllDirectories).</param>
+    /// <returns>A <see cref="DatabaseSchema"/> representing the parsed entity schema.</returns>
     public DatabaseSchema ReadDirectories(IEnumerable<string> directoryPaths, string searchPattern = "*.cs", SearchOption searchOption = SearchOption.AllDirectories)
     {
         var csFiles = new List<string>();

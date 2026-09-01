@@ -11,9 +11,9 @@ namespace SchemaAlign.Cli.Services;
 public class SchemaDetectionService
 {
     /// <summary>
-    /// Detects and returns an appropriate <see cref="ISchemaReader"/> for the given path or connection string.
+    /// Detects and returns an appropriate <see cref="ISchemaReader"/> for the given path, multi-path string, or connection string.
     /// </summary>
-    /// <param name="pathOrConnectionString">The file path, directory, or database connection string.</param>
+    /// <param name="pathOrConnectionString">The file path, directory, semicolon/comma-separated multi-path, or database connection string.</param>
     /// <returns>A schema reader instance capable of parsing the source.</returns>
     /// <exception cref="ArgumentException">Thrown when the input path or connection string is empty.</exception>
     /// <exception cref="NotSupportedException">Thrown when the format is unsupported or the required reader is unavailable.</exception>
@@ -79,9 +79,9 @@ public class SchemaDetectionService
     }
 
     /// <summary>
-    /// Detects the <see cref="TargetType"/> represented by the given path or connection string.
+    /// Detects the <see cref="TargetType"/> represented by the given path, multi-path string, or connection string.
     /// </summary>
-    /// <param name="pathOrConnectionString">The file path, directory, or database connection string.</param>
+    /// <param name="pathOrConnectionString">The file path, directory, semicolon/comma-separated multi-path, or database connection string.</param>
     /// <returns>The detected <see cref="TargetType"/>, or <see cref="TargetType.Unknown"/> if not recognized.</returns>
     public virtual TargetType DetectTargetType(string pathOrConnectionString)
     {
@@ -127,9 +127,9 @@ public class SchemaDetectionService
     }
 
     /// <summary>
-    /// Reads and parses a database schema from the specified path or connection string.
+    /// Reads and parses a database schema from the specified path, multi-path string, or connection string.
     /// </summary>
-    /// <param name="pathOrConnectionString">The file path, directory, or database connection string.</param>
+    /// <param name="pathOrConnectionString">The file path, directory, semicolon/comma-separated multi-path, or database connection string.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A <see cref="DatabaseSchema"/> representing the parsed schema.</returns>
     /// <exception cref="ArgumentException">Thrown when the input path or connection string is empty.</exception>

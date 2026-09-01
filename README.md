@@ -4,7 +4,7 @@ Universal database and entity schema alignment tool for .NET. SchemaAlign parses
 
 ## Features
 
-- **Multi-Source Parsing**: Reads schemas from Mermaid ER diagrams (`.mmd`, `.mermaid`), C# entity classes/directories (`.cs`), SQL scripts (`.sql`), and SQL Server databases.
+- **Multi-Source Parsing**: Reads schemas from Mermaid ER diagrams (`.mmd`, `.mermaid`), C# entity classes/directories (`.cs`, including semicolon- or comma-separated multi-paths), SQL scripts (`.sql`), and SQL Server databases.
 - **Diff Modes**:
   - `incremental` (default): Designed for sprint diagrams; compares changes while preserving existing unmentioned tables in your codebase.
   - `snapshot`: Treats target schema as the complete source of truth; marks unmentioned tables and columns for removal.
@@ -31,7 +31,7 @@ dotnet run --project SchemaAlign -- diff --source ./src/Entities --target ./docs
 ```
 
 **Options**:
-- `-s`, `--source` *(required)*: Path to current/base schema (`.cs`, entity directory, or database). Aliases: `--from`, `--current`, `--base`.
+- `-s`, `--source` *(required)*: Path to current/base schema (`.cs`, entity directory or semicolon/comma-separated multi-paths, or database). Aliases: `--from`, `--current`, `--base`.
 - `-t`, `--target` *(required)*: Path to desired/target schema (`.mmd`, `.cs`, etc.). Aliases: `--to`, `--desired`.
 - `-m`, `--mode`: Diff mode (`incremental` [default] or `snapshot`).
 - `-o`, `--output`: Output format (`console` [default], `json`, `markdown`).
@@ -45,7 +45,7 @@ dotnet run --project SchemaAlign -- sync --source ./src/Entities --target ./docs
 ```
 
 **Options**:
-- `-s`, `--source` *(required)*: Path to current/base schema to be updated. Aliases: `--from`, `--current`, `--base`.
+- `-s`, `--source` *(required)*: Path to current/base schema to be updated (supports semicolon/comma-separated multi-paths; updates apply to primary path). Aliases: `--from`, `--current`, `--base`.
 - `-t`, `--target` *(required)*: Path to desired/target schema to align toward. Aliases: `--to`, `--desired`.
 - `-m`, `--mode`: Diff mode (`incremental` [default] or `snapshot`).
 - `-i`, `--interactive`: Run interactive checklist prompt to toggle individual changes (default: `true`).
@@ -62,5 +62,5 @@ dotnet run --project SchemaAlign -- inspect --source ./docs/schema.mmd
 ```
 
 **Options**:
-- `-s`, `--source` *(required)*: Path to schema file or directory to inspect. Aliases: `--from`.
+- `-s`, `--source` *(required)*: Path to schema file or directory to inspect (supports semicolon/comma-separated multi-paths). Aliases: `--from`.
 - `-o`, `--output`: Output format (`console` [default] or `json`).
