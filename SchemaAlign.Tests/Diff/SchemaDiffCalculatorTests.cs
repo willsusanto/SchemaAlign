@@ -107,7 +107,7 @@ public class SchemaDiffCalculatorTests
         legacyTable.AddColumn(new ColumnSchema { Name = "Message", Type = StandardType.String, Length = 500 });
         source.AddTable(legacyTable);
 
-        var diff = SchemaDiffCalculator.Calculate(source, target);
+        var diff = SchemaDiffCalculator.Calculate(source, target, SchemaDiffOptions.FullSnapshot);
 
         diff.HasChanges.Should().BeTrue();
         diff.DeletedTables.Should().HaveCount(1);
@@ -119,6 +119,56 @@ public class SchemaDiffCalculatorTests
 
         tableDiff.DeletedColumns.Should().HaveCount(2);
         tableDiff.Columns.Should().OnlyContain(c => c.Kind == DiffKind.Deleted);
+    }
+
+    [Fact]
+    public void Calculate_IncrementalMode_ShouldIgnoreOmittedTablesAndForeignKeysByDefault()
+    {
+        var source = new DatabaseSchema();
+        var target = new DatabaseSchema();
+
+        // Source has Users, Orders, and LegacyLogs
+        var usersSource = new TableSchema { Name = "Users" };
+        usersSource.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+        usersSource.AddColumn(new ColumnSchema { Name = "OldField", Type = StandardType.String });
+        usersSource.AddForeignKey(new ForeignKeySchema
+        {
+            ConstraintName = "FK_Users_Roles",
+            PrincipalTable = "Roles",
+            PrincipalColumn = "Id",
+            DependentTable = "Users",
+            DependentColumn = "RoleId"
+        });
+        source.AddTable(usersSource);
+
+        var legacySource = new TableSchema { Name = "LegacyLogs" };
+        legacySource.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.BigInt });
+        source.AddTable(legacySource);
+
+        // Target (Mermaid sprint) only lists Users with NewField (omits LegacyLogs and omits FK_Users_Roles)
+        var usersTarget = new TableSchema { Name = "Users" };
+        usersTarget.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+        usersTarget.AddColumn(new ColumnSchema { Name = "NewField", Type = StandardType.String, Length = 50 });
+        target.AddTable(usersTarget);
+
+        // Default Calculate uses Incremental mode
+        var diff = SchemaDiffCalculator.Calculate(source, target);
+
+        diff.HasChanges.Should().BeTrue();
+        // LegacyLogs is omitted from target -> ignored, not deleted
+        diff.DeletedTables.Should().BeEmpty();
+        diff.FindTable("LegacyLogs").Should().BeNull();
+
+        var usersDiff = diff.FindTable("Users");
+        usersDiff.Should().NotBeNull();
+        usersDiff!.Kind.Should().Be(DiffKind.Modified);
+
+        // Columns inside declared table: OldField is deleted, NewField is added
+        usersDiff.AddedColumns.Should().ContainSingle(c => c.ColumnName == "NewField");
+        usersDiff.DeletedColumns.Should().ContainSingle(c => c.ColumnName == "OldField");
+
+        // Omitted foreign key is preserved / not deleted
+        usersDiff.DeletedForeignKeys.Should().BeEmpty();
     }
 
     [Fact]
@@ -366,7 +416,7 @@ public class SchemaDiffCalculatorTests
         });
         target.AddTable(tableTarget);
 
-        var diff = SchemaDiffCalculator.Calculate(source, target);
+        var diff = SchemaDiffCalculator.Calculate(source, target, SchemaDiffOptions.FullSnapshot);
         var tableDiff = diff.FindTable("Orders");
 
         tableDiff.Should().NotBeNull();
@@ -486,7 +536,7 @@ public class SchemaDiffCalculatorTests
         ordersTarget.AddColumn(new ColumnSchema { Name = "Total", Type = StandardType.Decimal, Precision = 18, Scale = 2 });
         target.AddTable(ordersTarget);
 
-        var diff = SchemaDiffCalculator.Calculate(source, target);
+        var diff = SchemaDiffCalculator.Calculate(source, target, SchemaDiffOptions.FullSnapshot);
 
         diff.HasChanges.Should().BeTrue();
         diff.Tables.Should().HaveCount(4);
@@ -607,7 +657,7 @@ public class SchemaDiffCalculatorTests
         target.AddTable(settingsTarget);
 
         // 3. Calculate Diff
-        var diff = SchemaDiffCalculator.Calculate(source, target);
+        var diff = SchemaDiffCalculator.Calculate(source, target, SchemaDiffOptions.FullSnapshot);
 
         // 4. Assertions
         diff.HasChanges.Should().BeTrue();

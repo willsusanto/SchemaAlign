@@ -80,3 +80,23 @@ public class SchemaDiff
     public TableDiff? FindTable(string tableName) =>
         Tables.FirstOrDefault(t => string.Equals(t.TableName, tableName, StringComparison.OrdinalIgnoreCase));
 }
+
+public class SchemaDiffOptions
+{
+    /// <summary>
+    /// If true, tables present in source but omitted from target are ignored (sprint incremental mode).
+    /// If false, omitted tables are marked as DiffKind.Deleted (full snapshot mode).
+    /// Default is true.
+    /// </summary>
+    public bool IgnoreOmittedTables { get; set; } = true;
+
+    /// <summary>
+    /// If true, foreign keys present in source but omitted from target are ignored (preserved).
+    /// If false, omitted foreign keys are marked as DiffKind.Deleted.
+    /// Default is true.
+    /// </summary>
+    public bool IgnoreOmittedForeignKeys { get; set; } = true;
+
+    public static SchemaDiffOptions Incremental => new() { IgnoreOmittedTables = true, IgnoreOmittedForeignKeys = true };
+    public static SchemaDiffOptions FullSnapshot => new() { IgnoreOmittedTables = false, IgnoreOmittedForeignKeys = false };
+}

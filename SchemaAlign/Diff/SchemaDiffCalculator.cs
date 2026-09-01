@@ -4,8 +4,10 @@ namespace SchemaAlign.Diff;
 
 public static class SchemaDiffCalculator
 {
-    public static SchemaDiff Calculate(DatabaseSchema source, DatabaseSchema target)
+    public static SchemaDiff Calculate(DatabaseSchema source, DatabaseSchema target, SchemaDiffOptions? options = null)
     {
+        options ??= SchemaDiffOptions.Incremental;
+
         var schemaDiff = new SchemaDiff
         {
             SourceSchema = source,
@@ -67,41 +69,49 @@ public static class SchemaDiffCalculator
             }
             else if (sourceTable != null && targetTable == null)
             {
-                // Deleted table
-                var tableDiff = new TableDiff
+                // Table in source but omitted from target
+                if (!options.IgnoreOmittedTables)
                 {
-                    TableName = sourceTable.Name,
-                    Schema = sourceTable.Schema,
-                    Kind = DiffKind.Deleted,
-                    Source = sourceTable,
-                    Target = null
-                };
-
-                foreach (var col in sourceTable.Columns.Values)
-                {
-                    tableDiff.Columns.Add(new ColumnDiff
+                    // Full snapshot mode: Deleted table
+                    var tableDiff = new TableDiff
                     {
-                        ColumnName = col.Name,
+                        TableName = sourceTable.Name,
+                        Schema = sourceTable.Schema,
                         Kind = DiffKind.Deleted,
-                        Source = col,
-                        Target = null,
-                        Changes = ChangeDetail.None
-                    });
-                }
+                        Source = sourceTable,
+                        Target = null
+                    };
 
-                foreach (var fk in sourceTable.ForeignKeys)
-                {
-                    tableDiff.ForeignKeys.Add(new ForeignKeyDiff
+                    foreach (var col in sourceTable.Columns.Values)
                     {
-                        ConstraintName = fk.ConstraintName,
-                        Kind = DiffKind.Deleted,
-                        Source = fk,
-                        Target = null,
-                        CardinalityChanged = false
-                    });
-                }
+                        tableDiff.Columns.Add(new ColumnDiff
+                        {
+                            ColumnName = col.Name,
+                            Kind = DiffKind.Deleted,
+                            Source = col,
+                            Target = null,
+                            Changes = ChangeDetail.None
+                        });
+                    }
 
-                schemaDiff.Tables.Add(tableDiff);
+                    foreach (var fk in sourceTable.ForeignKeys)
+                    {
+                        tableDiff.ForeignKeys.Add(new ForeignKeyDiff
+                        {
+                            ConstraintName = fk.ConstraintName,
+                            Kind = DiffKind.Deleted,
+                            Source = fk,
+                            Target = null,
+                            CardinalityChanged = false
+                        });
+                    }
+
+                    schemaDiff.Tables.Add(tableDiff);
+                }
+                else
+                {
+                    // Incremental sprint mode: do nothing (omitted table is preserved)
+                }
             }
             else if (sourceTable != null && targetTable != null)
             {
@@ -114,7 +124,7 @@ public static class SchemaDiffCalculator
                     Target = targetTable
                 };
 
-                // Compare columns
+                // Compare columns (exhaustive within table definition)
                 var allColumnNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var colName in sourceTable.Columns.Keys)
                 {
@@ -243,18 +253,21 @@ public static class SchemaDiffCalculator
                     }
                 }
 
-                foreach (var sourceFk in sourceTable.ForeignKeys)
+                if (!options.IgnoreOmittedForeignKeys)
                 {
-                    if (!matchedSourceFks.Contains(sourceFk))
+                    foreach (var sourceFk in sourceTable.ForeignKeys)
                     {
-                        tableDiff.ForeignKeys.Add(new ForeignKeyDiff
+                        if (!matchedSourceFks.Contains(sourceFk))
                         {
-                            ConstraintName = sourceFk.ConstraintName,
-                            Kind = DiffKind.Deleted,
-                            Source = sourceFk,
-                            Target = null,
-                            CardinalityChanged = false
-                        });
+                            tableDiff.ForeignKeys.Add(new ForeignKeyDiff
+                            {
+                                ConstraintName = sourceFk.ConstraintName,
+                                Kind = DiffKind.Deleted,
+                                Source = sourceFk,
+                                Target = null,
+                                CardinalityChanged = false
+                            });
+                        }
                     }
                 }
 
