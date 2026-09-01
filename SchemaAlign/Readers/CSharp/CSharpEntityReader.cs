@@ -51,18 +51,42 @@ public class CSharpEntityReader : ISchemaReader
         return ReadSyntaxTrees(syntaxTrees);
     }
 
+    /// <summary>
+    /// Reads and parses C# entity classes from the specified directory.
+    /// </summary>
+    /// <param name="directoryPath">The directory containing C# source files.</param>
+    /// <param name="searchPattern">File search pattern (default: *.cs).</param>
+    /// <param name="searchOption">Search option (default: AllDirectories).</param>
+    /// <returns>A <see cref="DatabaseSchema"/> representing the parsed entity schema.</returns>
     public DatabaseSchema ReadDirectory(string directoryPath, string searchPattern = "*.cs", SearchOption searchOption = SearchOption.AllDirectories)
     {
-        if (!Directory.Exists(directoryPath))
-        {
-            throw new DirectoryNotFoundException($"Directory not found: {directoryPath}");
-        }
+        return ReadDirectories(new[] { directoryPath }, searchPattern, searchOption);
+    }
 
-        var csFiles = Directory.GetFiles(directoryPath, searchPattern, searchOption)
-            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
-                     && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                     && !f.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}"))
-            .ToList();
+    /// <summary>
+    /// Reads and parses C# entity classes across multiple directories.
+    /// </summary>
+    /// <param name="directoryPaths">The directories containing C# source files.</param>
+    /// <param name="searchPattern">File search pattern (default: *.cs).</param>
+    /// <param name="searchOption">Search option (default: AllDirectories).</param>
+    /// <returns>A <see cref="DatabaseSchema"/> representing the parsed entity schema.</returns>
+    public DatabaseSchema ReadDirectories(IEnumerable<string> directoryPaths, string searchPattern = "*.cs", SearchOption searchOption = SearchOption.AllDirectories)
+    {
+        var csFiles = new List<string>();
+        foreach (var dir in directoryPaths)
+        {
+            if (!Directory.Exists(dir))
+            {
+                throw new DirectoryNotFoundException($"Directory not found: {dir}");
+            }
+
+            var files = Directory.GetFiles(dir, searchPattern, searchOption)
+                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                         && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                         && !f.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}"));
+
+            csFiles.AddRange(files);
+        }
 
         return ReadFiles(csFiles);
     }

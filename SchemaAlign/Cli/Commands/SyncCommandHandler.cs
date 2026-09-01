@@ -168,9 +168,10 @@ public class SyncCommandHandler
             return 1;
         }
 
+        var primaryTargetDir = options.Source.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0];
         var applierOptions = new ApplierOptions
         {
-            TargetDirectory = options.Source,
+            TargetDirectory = primaryTargetDir,
             AllowDrops = options.AllowDrop,
             DryRun = options.DryRun
         };

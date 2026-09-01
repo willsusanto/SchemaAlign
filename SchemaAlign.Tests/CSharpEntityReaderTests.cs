@@ -1076,4 +1076,79 @@ public class CSharpEntityReaderTests
             }
         }
     }
+
+    [Fact]
+    public void ReadDirectories_MultipleFolders_ResolvesInheritanceFromBaseFolderAndExcludesSiblingFolders()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "SchemaAlign_MultiFolder_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var baseDir = Path.Combine(tempDir, "Model", "Base");
+            var libraryDbDir = Path.Combine(tempDir, "Model", "LibraryDB");
+            var otherDbDir = Path.Combine(tempDir, "Model", "OtherDB");
+
+            Directory.CreateDirectory(baseDir);
+            Directory.CreateDirectory(libraryDbDir);
+            Directory.CreateDirectory(otherDbDir);
+
+            // 1. Shared base model in Base folder
+            File.WriteAllText(Path.Combine(baseDir, "BaseModel.cs"), """
+                using System;
+
+                namespace MaskedApp.Model.Base;
+
+                public abstract class BaseModel
+                {
+                    public int Id { get; set; }
+                    public DateTime CreatedAt { get; set; }
+                }
+                """);
+
+            // 2. Entity in LibraryDB inheriting from BaseModel
+            File.WriteAllText(Path.Combine(libraryDbDir, "BookEntity.cs"), """
+                using MaskedApp.Model.Base;
+
+                namespace MaskedApp.Model.LibraryDB;
+
+                public class BookEntity : BaseModel
+                {
+                    public string Title { get; set; } = string.Empty;
+                }
+                """);
+
+            // 3. Sibling folder entity that should be excluded
+            File.WriteAllText(Path.Combine(otherDbDir, "ExcludedEntity.cs"), """
+                namespace MaskedApp.Model.OtherDB;
+
+                public class ExcludedEntity
+                {
+                    public int ExcludedId { get; set; }
+                }
+                """);
+
+            // Execute: Read only LibraryDB and Base directories
+            var schema = _reader.ReadDirectories(new[] { libraryDbDir, baseDir });
+
+            // Assert: BookEntity is included with both its own and inherited properties
+            schema.Tables.Should().ContainKey("BookEntity");
+            var bookTable = schema.Tables["BookEntity"];
+            bookTable.Columns.Should().ContainKey("Id");
+            bookTable.Columns.Should().ContainKey("CreatedAt");
+            bookTable.Columns.Should().ContainKey("Title");
+
+            // Assert: BaseModel abstract class is NOT a table
+            schema.Tables.Should().NotContainKey("BaseModel");
+
+            // Assert: ExcludedEntity in sibling folder is NOT included
+            schema.Tables.Should().NotContainKey("ExcludedEntity");
+            schema.Tables.Should().HaveCount(1);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
 }

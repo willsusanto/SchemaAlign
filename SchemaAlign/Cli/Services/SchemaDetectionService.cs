@@ -11,9 +11,9 @@ namespace SchemaAlign.Cli.Services;
 public class SchemaDetectionService
 {
     /// <summary>
-    /// Detects and returns an appropriate <see cref="ISchemaReader"/> for the given path or connection string.
+    /// Detects and returns an appropriate <see cref="ISchemaReader"/> for the given path, multi-path string, or connection string.
     /// </summary>
-    /// <param name="pathOrConnectionString">The file path, directory, or database connection string.</param>
+    /// <param name="pathOrConnectionString">The file path, directory, semicolon/comma-separated multi-path, or database connection string.</param>
     /// <returns>A schema reader instance capable of parsing the source.</returns>
     /// <exception cref="ArgumentException">Thrown when the input path or connection string is empty.</exception>
     /// <exception cref="NotSupportedException">Thrown when the format is unsupported or the required reader is unavailable.</exception>
@@ -23,6 +23,16 @@ public class SchemaDetectionService
             throw new ArgumentException("Path or connection string cannot be empty.", nameof(pathOrConnectionString));
 
         var trimmed = pathOrConnectionString.Trim();
+
+        // Check for semicolon or comma-separated multi-paths (ignoring SQL connection strings)
+        if (!IsConnectionString(trimmed) && (trimmed.Contains(';') || trimmed.Contains(',')))
+        {
+            var parts = trimmed.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length > 1 && parts.All(p => Directory.Exists(p) || File.Exists(p) || p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)))
+            {
+                return new CSharpEntityReader();
+            }
+        }
 
         // 1. Mermaid ER diagram file
         if (trimmed.EndsWith(".mmd", StringComparison.OrdinalIgnoreCase) ||
@@ -43,9 +53,7 @@ public class SchemaDetectionService
         }
 
         // 3. SQL Server Connection string
-        if (trimmed.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Contains("Initial Catalog=", StringComparison.OrdinalIgnoreCase))
+        if (IsConnectionString(trimmed))
         {
             // Dynamically locate SqlServerSchemaReader if compiled in another assembly or namespace
             var sqlServerType = Type.GetType("SchemaAlign.Readers.SqlServer.SqlServerSchemaReader, SchemaAlign");
@@ -71,9 +79,9 @@ public class SchemaDetectionService
     }
 
     /// <summary>
-    /// Detects the <see cref="TargetType"/> represented by the given path or connection string.
+    /// Detects the <see cref="TargetType"/> represented by the given path, multi-path string, or connection string.
     /// </summary>
-    /// <param name="pathOrConnectionString">The file path, directory, or database connection string.</param>
+    /// <param name="pathOrConnectionString">The file path, directory, semicolon/comma-separated multi-path, or database connection string.</param>
     /// <returns>The detected <see cref="TargetType"/>, or <see cref="TargetType.Unknown"/> if not recognized.</returns>
     public virtual TargetType DetectTargetType(string pathOrConnectionString)
     {
@@ -88,9 +96,7 @@ public class SchemaDetectionService
             return TargetType.Mermaid;
         }
 
-        if (trimmed.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Contains("Initial Catalog=", StringComparison.OrdinalIgnoreCase))
+        if (IsConnectionString(trimmed))
         {
             return TargetType.SqlServerDatabase;
         }
@@ -98,6 +104,16 @@ public class SchemaDetectionService
         if (trimmed.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
         {
             return TargetType.SqlServerScript;
+        }
+
+        // Check for multi-path C# directories
+        if (!IsConnectionString(trimmed) && (trimmed.Contains(';') || trimmed.Contains(',')))
+        {
+            var parts = trimmed.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length > 1)
+            {
+                return TargetType.CSharp;
+            }
         }
 
         if (trimmed.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
@@ -111,9 +127,9 @@ public class SchemaDetectionService
     }
 
     /// <summary>
-    /// Reads and parses a database schema from the specified path or connection string.
+    /// Reads and parses a database schema from the specified path, multi-path string, or connection string.
     /// </summary>
-    /// <param name="pathOrConnectionString">The file path, directory, or database connection string.</param>
+    /// <param name="pathOrConnectionString">The file path, directory, semicolon/comma-separated multi-path, or database connection string.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A <see cref="DatabaseSchema"/> representing the parsed schema.</returns>
     /// <exception cref="ArgumentException">Thrown when the input path or connection string is empty.</exception>
@@ -126,7 +142,38 @@ public class SchemaDetectionService
 
         var trimmed = pathOrConnectionString.Trim();
 
-        // 1. Mermaid
+        // 1. Semicolon or comma-separated multi-paths for C# directories/files
+        if (!IsConnectionString(trimmed) && (trimmed.Contains(';') || trimmed.Contains(',')))
+        {
+            var parts = trimmed.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length > 1)
+            {
+                var csFiles = new List<string>();
+                foreach (var part in parts)
+                {
+                    if (File.Exists(part))
+                    {
+                        csFiles.Add(part);
+                    }
+                    else if (Directory.Exists(part))
+                    {
+                        var files = Directory.GetFiles(part, "*.cs", SearchOption.AllDirectories)
+                            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                                     && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                                     && !f.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}"));
+                        csFiles.AddRange(files);
+                    }
+                    else
+                    {
+                        throw new DirectoryNotFoundException($"Directory or file not found: '{part}'");
+                    }
+                }
+
+                return new CSharpEntityReader().ReadFiles(csFiles);
+            }
+        }
+
+        // 2. Mermaid
         if (trimmed.EndsWith(".mmd", StringComparison.OrdinalIgnoreCase) ||
             trimmed.EndsWith(".mermaid", StringComparison.OrdinalIgnoreCase))
         {
@@ -137,22 +184,20 @@ public class SchemaDetectionService
             return new MermaidSchemaReader().Read(text);
         }
 
-        // 2. C# Entity Single File
+        // 3. C# Entity Single File
         if (trimmed.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
         {
             return new CSharpEntityReader().ReadFile(trimmed);
         }
 
-        // 3. C# Entity Directory
+        // 4. C# Entity Directory
         if (Directory.Exists(trimmed))
         {
             return new CSharpEntityReader().ReadDirectory(trimmed);
         }
 
-        // 4. SQL Server Connection String
-        if (trimmed.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Contains("Initial Catalog=", StringComparison.OrdinalIgnoreCase))
+        // 5. SQL Server Connection String
+        if (IsConnectionString(trimmed))
         {
             var sqlServerType = Type.GetType("SchemaAlign.Readers.SqlServer.SqlServerSchemaReader, SchemaAlign");
             if (sqlServerType != null)
@@ -163,7 +208,7 @@ public class SchemaDetectionService
             throw new NotSupportedException($"SQL Server live connection reading is not yet available in this build: '{pathOrConnectionString}'.");
         }
 
-        // 5. SQL Script file
+        // 6. SQL Script file
         if (trimmed.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
         {
             if (!File.Exists(trimmed))
@@ -180,5 +225,12 @@ public class SchemaDetectionService
         }
 
         throw new NotSupportedException($"Schema format for '{pathOrConnectionString}' is not supported. Supported formats: .mmd, .mermaid, .cs, C# entity directory, .sql, or SQL connection strings.");
+    }
+
+    private static bool IsConnectionString(string str)
+    {
+        return str.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
+               str.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) ||
+               str.Contains("Initial Catalog=", StringComparison.OrdinalIgnoreCase);
     }
 }
