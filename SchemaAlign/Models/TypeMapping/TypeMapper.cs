@@ -214,7 +214,14 @@ public static class TypeMapper
 
     public static StandardType FromMermaidType(string mermaidType, out int? length)
     {
+        return FromMermaidType(mermaidType, out length, out _, out _);
+    }
+
+    public static StandardType FromMermaidType(string mermaidType, out int? length, out int? precision, out int? scale)
+    {
         length = null;
+        precision = null;
+        scale = null;
         var cleanType = mermaidType.Trim();
         var match = SqlDimensionRegex.Match(cleanType);
         if (match.Success)
@@ -223,11 +230,24 @@ public static class TypeMapper
             if (match.Groups[2].Success)
             {
                 var lenStr = match.Groups[2].Value;
-                length = lenStr.Equals("max", StringComparison.OrdinalIgnoreCase) ? -1 : int.Parse(lenStr);
+                if (lenStr.Equals("max", StringComparison.OrdinalIgnoreCase))
+                {
+                    length = -1;
+                }
+                else
+                {
+                    var val = int.Parse(lenStr);
+                    length = val;
+                    precision = val;
+                }
+            }
+            if (match.Groups[3].Success)
+            {
+                scale = int.Parse(match.Groups[3].Value);
             }
         }
 
-        return cleanType.ToLowerInvariant() switch
+        var stdType = cleanType.ToLowerInvariant() switch
         {
             "int" or "integer" or "int4" or "serial" or "number" => StandardType.Int,
             "bigint" or "int8" or "bigserial" or "long" => StandardType.BigInt,
@@ -247,6 +267,19 @@ public static class TypeMapper
             "json" or "jsonb" => StandardType.Json,
             _ => StandardType.String
         };
+
+        if (stdType == StandardType.Decimal)
+        {
+            length = null;
+        }
+        else
+        {
+            precision = null;
+            scale = null;
+        }
+
+        return stdType;
     }
 }
+
 
