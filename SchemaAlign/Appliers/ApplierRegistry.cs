@@ -1,3 +1,5 @@
+using SchemaAlign.Appliers.CSharp;
+using SchemaAlign.Appliers.SqlServer;
 using SchemaAlign.Cli.Services;
 
 namespace SchemaAlign.Appliers;
@@ -11,11 +13,9 @@ public class ApplierRegistry
 
     public ApplierRegistry()
     {
-        // Dynamically register CSharpEntityApplier if present in assembly
-        TryRegister("SchemaAlign.Appliers.CSharp.CSharpEntityApplier, SchemaAlign", TargetType.CSharp);
-        // Dynamically register SqlServerMigrationApplier if present in assembly
-        TryRegister("SchemaAlign.Appliers.SqlServer.SqlServerMigrationApplier, SchemaAlign", TargetType.SqlServerScript);
-        TryRegister("SchemaAlign.Appliers.SqlServer.SqlServerMigrationApplier, SchemaAlign", TargetType.SqlServerDatabase);
+        Register(TargetType.CSharp, new CSharpEntityApplier());
+        Register(TargetType.SqlServerScript, new SqlServerMigrationApplier());
+        Register(TargetType.SqlServerDatabase, new SqlServerMigrationApplier());
     }
 
     /// <summary>
