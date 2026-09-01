@@ -706,4 +706,374 @@ public class CSharpEntityReaderTests
             }
         }
     }
+
+    [Fact]
+    public void ReadFile_ValidFile_ReturnsParsedSchema()
+    {
+        var tempFile = Path.Combine(Path.GetTempPath(), $"masked_entity_{Guid.NewGuid():N}.cs");
+        var code = """
+            namespace MaskedApp.Synthetic;
+
+            public class MaskedSingleFileEntity
+            {
+                public int Id { get; set; }
+                public string SyntheticField { get; set; }
+            }
+            """;
+
+        try
+        {
+            File.WriteAllText(tempFile, code);
+            var schema = _reader.ReadFile(tempFile);
+
+            schema.Tables.Should().ContainKey("MaskedSingleFileEntity");
+            schema.Tables["MaskedSingleFileEntity"].Columns.Should().ContainKey("Id");
+            schema.Tables["MaskedSingleFileEntity"].Columns.Should().ContainKey("SyntheticField");
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
+    }
+
+    [Fact]
+    public void ReadFile_NonExistentFile_ThrowsFileNotFoundException()
+    {
+        var nonExistentPath = Path.Combine(Path.GetTempPath(), $"non_existent_{Guid.NewGuid():N}.cs");
+        var act = () => _reader.ReadFile(nonExistentPath);
+        act.Should().Throw<FileNotFoundException>();
+    }
+
+    [Fact]
+    public void ReadDirectory_NonExistentDirectory_ThrowsDirectoryNotFoundException()
+    {
+        var nonExistentPath = Path.Combine(Path.GetTempPath(), $"non_existent_dir_{Guid.NewGuid():N}");
+        var act = () => _reader.ReadDirectory(nonExistentPath);
+        act.Should().Throw<DirectoryNotFoundException>();
+    }
+
+    [Fact]
+    public void Read_ConventionForeignKey_ResolvesWithoutExplicitForeignKeyAttribute()
+    {
+        var code = """
+            namespace MaskedApp.Synthetic;
+
+            public class SampleHeaderEntity
+            {
+                public int Id { get; set; }
+                public string HeaderName { get; set; }
+            }
+
+            public class SampleItemEntity
+            {
+                public int Id { get; set; }
+                public int SampleHeaderEntityId { get; set; }
+                public virtual SampleHeaderEntity Header { get; set; }
+            }
+            """;
+
+        var schema = _reader.Read(code);
+
+        schema.Tables.Should().ContainKey("SampleItemEntity");
+        var itemTable = schema.Tables["SampleItemEntity"];
+        itemTable.Columns.Should().NotContainKey("Header");
+        itemTable.Columns.Should().ContainKey("SampleHeaderEntityId");
+
+        itemTable.ForeignKeys.Should().ContainSingle();
+        var fk = itemTable.ForeignKeys.First();
+        fk.PrincipalTable.Should().Be("SampleHeaderEntity");
+        fk.DependentColumn.Should().Be("SampleHeaderEntityId");
+    }
+
+    [Fact]
+    public void Read_ConventionPrimaryKey_WithClassNameId_SetsPrimaryKey()
+    {
+        var code = """
+            namespace MaskedApp.Synthetic;
+
+            public class SampleCustomKeyedEntity
+            {
+                public int SampleCustomKeyedEntityId { get; set; }
+                public string DataPayload { get; set; }
+            }
+            """;
+
+        var schema = _reader.Read(code);
+
+        var table = schema.Tables["SampleCustomKeyedEntity"];
+        var pkCol = table.Columns["SampleCustomKeyedEntityId"];
+        pkCol.IsPrimaryKey.Should().BeTrue();
+        pkCol.IsIdentity.Should().BeTrue();
+        table.PrimaryKeys.Should().ContainSingle().Which.Should().Be("SampleCustomKeyedEntityId");
+    }
+
+    [Fact]
+    public void Read_DatabaseGeneratedIdentityAttribute_SetsIsIdentity()
+    {
+        var code = """
+            using System.ComponentModel.DataAnnotations.Schema;
+
+            namespace MaskedApp.Synthetic;
+
+            public class SampleExplicitIdentityEntity
+            {
+                [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+                public int CustomSeqNumber { get; set; }
+                public string Value { get; set; }
+            }
+            """;
+
+        var schema = _reader.Read(code);
+
+        var table = schema.Tables["SampleExplicitIdentityEntity"];
+        table.Columns["CustomSeqNumber"].IsIdentity.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ReadDirectory_EndToEndMaskedEntityModel_GeneratesFullDatabaseSchemaEvidence()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"schema_align_e2e_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var baseAuditCode = """
+                using System;
+                using System.ComponentModel.DataAnnotations;
+                using System.ComponentModel.DataAnnotations.Schema;
+
+                namespace MaskedDomain.Common;
+
+                /// <summary>
+                /// Base audit entity defining standard metadata columns.
+                /// </summary>
+                public abstract class BaseMaskedEntity
+                {
+                    /// <summary>
+                    /// User identifier who created this record.
+                    /// </summary>
+                    [Column("CreatedBy")]
+                    [Required]
+                    [StringLength(50)]
+                    public string CreatedBy { get; set; }
+
+                    /// <summary>
+                    /// Timestamp when the record was created.
+                    /// </summary>
+                    [Column("CreatedAt")]
+                    [Required]
+                    public DateTime CreatedAt { get; set; }
+
+                    /// <summary>
+                    /// User identifier who last modified this record.
+                    /// </summary>
+                    [Column("UpdatedBy")]
+                    [StringLength(50)]
+                    public string? UpdatedBy { get; set; }
+
+                    /// <summary>
+                    /// Timestamp when the record was last modified.
+                    /// </summary>
+                    [Column("UpdatedAt")]
+                    public DateTime? UpdatedAt { get; set; }
+
+                    /// <summary>
+                    /// Flag indicating if the record is active.
+                    /// </summary>
+                    [Column("IsActive")]
+                    [Required]
+                    public bool IsActive { get; set; }
+                }
+                """;
+
+            var lookupStatusEntityCode = """
+                using System.Collections.Generic;
+                using System.ComponentModel.DataAnnotations;
+                using System.ComponentModel.DataAnnotations.Schema;
+                using MaskedDomain.Common;
+
+                namespace MaskedDomain.Entities;
+
+                /// <summary>
+                /// Lookup table for document workflow statuses.
+                /// </summary>
+                [Table("tbl_masked_status", Schema = "workflow")]
+                public class MaskedStatusEntity : BaseMaskedEntity
+                {
+                    [Key]
+                    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+                    public int IdStatus { get; set; }
+
+                    [Required]
+                    [MaxLength(50)]
+                    public string StatusCode { get; set; }
+
+                    [MaxLength(100)]
+                    public string StatusDescription { get; set; }
+
+                    public virtual ICollection<MaskedDocumentHeaderEntity> Documents { get; set; }
+                }
+                """;
+
+            var headerEntityCode = """
+                using System;
+                using System.Collections.Generic;
+                using System.ComponentModel.DataAnnotations;
+                using System.ComponentModel.DataAnnotations.Schema;
+                using MaskedDomain.Common;
+
+                namespace MaskedDomain.Entities;
+
+                /// <summary>
+                /// Header entity representing a business transaction document.
+                /// </summary>
+                [Table("tbl_masked_document_header", Schema = "workflow")]
+                public class MaskedDocumentHeaderEntity : BaseMaskedEntity
+                {
+                    [Key]
+                    [StringLength(36)]
+                    public string IdDocument { get; set; }
+
+                    [Required]
+                    [StringLength(100)]
+                    public string DocumentNumber { get; set; }
+
+                    [Column("TotalAmount", TypeName = "decimal(18,2)")]
+                    public decimal TotalAmount { get; set; }
+
+                    public int IdStatus { get; set; }
+
+                    [ForeignKey("IdStatus")]
+                    public virtual MaskedStatusEntity Status { get; set; }
+
+                    public virtual ICollection<MaskedDocumentItemEntity> Items { get; set; }
+                }
+                """;
+
+            var itemEntityCode = """
+                using System.ComponentModel.DataAnnotations;
+                using System.ComponentModel.DataAnnotations.Schema;
+                using MaskedDomain.Common;
+
+                namespace MaskedDomain.Entities;
+
+                /// <summary>
+                /// Line item entity belonging to a document header.
+                /// </summary>
+                [Table("tbl_masked_document_item", Schema = "workflow")]
+                public class MaskedDocumentItemEntity : BaseMaskedEntity
+                {
+                    [Key]
+                    [StringLength(36)]
+                    public string IdDocumentItem { get; set; }
+
+                    [Required]
+                    [StringLength(36)]
+                    [ForeignKey("Document")]
+                    public string IdDocument { get; set; }
+
+                    [Required]
+                    [MaxLength(100)]
+                    public string ItemDescription { get; set; }
+
+                    public int Quantity { get; set; }
+
+                    [Column("UnitPrice", TypeName = "decimal(18,4)")]
+                    public decimal UnitPrice { get; set; }
+
+                    [NotMapped]
+                    public decimal CalculatedSubtotal => Quantity * UnitPrice;
+
+                    public virtual MaskedDocumentHeaderEntity Document { get; set; }
+                }
+                """;
+
+            File.WriteAllText(Path.Combine(tempDir, "BaseMaskedEntity.cs"), baseAuditCode);
+            File.WriteAllText(Path.Combine(tempDir, "MaskedStatusEntity.cs"), lookupStatusEntityCode);
+            File.WriteAllText(Path.Combine(tempDir, "MaskedDocumentHeaderEntity.cs"), headerEntityCode);
+            File.WriteAllText(Path.Combine(tempDir, "MaskedDocumentItemEntity.cs"), itemEntityCode);
+
+            var schema = _reader.ReadDirectory(tempDir);
+
+            schema.Tables.Should().HaveCount(3);
+            schema.Tables.Should().ContainKey("tbl_masked_status");
+            schema.Tables.Should().ContainKey("tbl_masked_document_header");
+            schema.Tables.Should().ContainKey("tbl_masked_document_item");
+
+            var statusTable = schema.Tables["tbl_masked_status"];
+            statusTable.Schema.Should().Be("workflow");
+            statusTable.Columns["IdStatus"].IsPrimaryKey.Should().BeTrue();
+            statusTable.Columns["IdStatus"].IsIdentity.Should().BeTrue();
+            statusTable.Columns["StatusCode"].Length.Should().Be(50);
+            statusTable.Columns["StatusCode"].IsNullable.Should().BeFalse();
+            statusTable.Columns["CreatedBy"].Length.Should().Be(50);
+
+            var headerTable = schema.Tables["tbl_masked_document_header"];
+            headerTable.Schema.Should().Be("workflow");
+            headerTable.Columns["IdDocument"].IsPrimaryKey.Should().BeTrue();
+            headerTable.Columns["TotalAmount"].Type.Should().Be(StandardType.Decimal);
+            headerTable.Columns["TotalAmount"].Precision.Should().Be(18);
+            headerTable.Columns["TotalAmount"].Scale.Should().Be(2);
+            headerTable.ForeignKeys.Should().Contain(fk => fk.PrincipalTable == "tbl_masked_status" && fk.DependentColumn == "IdStatus");
+
+            var itemTable = schema.Tables["tbl_masked_document_item"];
+            itemTable.Schema.Should().Be("workflow");
+            itemTable.Columns["IdDocumentItem"].IsPrimaryKey.Should().BeTrue();
+            itemTable.Columns["UnitPrice"].Type.Should().Be(StandardType.Decimal);
+            itemTable.Columns["UnitPrice"].Precision.Should().Be(18);
+            itemTable.Columns["UnitPrice"].Scale.Should().Be(4);
+            itemTable.Columns.Should().NotContainKey("CalculatedSubtotal");
+            itemTable.ForeignKeys.Should().Contain(fk => fk.PrincipalTable == "tbl_masked_document_header" && fk.DependentColumn == "IdDocument");
+
+            // Write test evidence output if evidence directory exists
+            var evidenceDir = @"C:\Users\william.susanto\.no-mistakes\evidence\01M1DP6RTM5V2HQ5KV9JVC136Y";
+            if (Directory.Exists(evidenceDir))
+            {
+                var jsonOptions = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+                var jsonContent = System.Text.Json.JsonSerializer.Serialize(schema, jsonOptions);
+                File.WriteAllText(Path.Combine(evidenceDir, "csharp_entity_reader_e2e_evidence.json"), jsonContent);
+
+                var report = $"""
+                    # C# Entity Roslyn Reader E2E Execution Evidence
+
+                    - **Executed At**: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC
+                    - **Tables Parsed**: {schema.Tables.Count}
+                    - **Target Schemas**: {string.Join(", ", schema.Tables.Values.Select(t => t.Schema).Distinct())}
+
+                    ## Parsed Tables and Columns Summary
+
+                    ### 1. `tbl_masked_status` (Schema: `{statusTable.Schema}`)
+                    - **Comment**: {statusTable.Comment}
+                    - **Columns ({statusTable.Columns.Count})**:
+                    {string.Join(Environment.NewLine, statusTable.Columns.Values.Select(c => $"  - `{c.Name}`: {c.Type} (Nullable: {c.IsNullable}, PK: {c.IsPrimaryKey}, Identity: {c.IsIdentity}, Length: {c.Length})"))}
+
+                    ### 2. `tbl_masked_document_header` (Schema: `{headerTable.Schema}`)
+                    - **Comment**: {headerTable.Comment}
+                    - **Columns ({headerTable.Columns.Count})**:
+                    {string.Join(Environment.NewLine, headerTable.Columns.Values.Select(c => $"  - `{c.Name}`: {c.Type} (Nullable: {c.IsNullable}, PK: {c.IsPrimaryKey}, Precision: {c.Precision}, Scale: {c.Scale})"))}
+                    - **Foreign Keys**:
+                    {string.Join(Environment.NewLine, headerTable.ForeignKeys.Select(fk => $"  - `{fk.DependentColumn}` -> `{fk.PrincipalTable}.{fk.PrincipalColumn}` ({fk.Cardinality})"))}
+
+                    ### 3. `tbl_masked_document_item` (Schema: `{itemTable.Schema}`)
+                    - **Comment**: {itemTable.Comment}
+                    - **Columns ({itemTable.Columns.Count})**:
+                    {string.Join(Environment.NewLine, itemTable.Columns.Values.Select(c => $"  - `{c.Name}`: {c.Type} (Nullable: {c.IsNullable}, PK: {c.IsPrimaryKey}, Precision: {c.Precision}, Scale: {c.Scale})"))}
+                    - **Foreign Keys**:
+                    {string.Join(Environment.NewLine, itemTable.ForeignKeys.Select(fk => $"  - `{fk.DependentColumn}` -> `{fk.PrincipalTable}.{fk.PrincipalColumn}` ({fk.Cardinality})"))}
+                    """;
+
+                File.WriteAllText(Path.Combine(evidenceDir, "csharp_entity_reader_e2e_report.md"), report);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
 }
