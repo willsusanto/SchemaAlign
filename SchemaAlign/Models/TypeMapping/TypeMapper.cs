@@ -276,8 +276,14 @@ public static class TypeMapper
         {
             length = null;
         }
+        else if (stdType is StandardType.String or StandardType.ByteArray or StandardType.Json)
+        {
+            precision = null;
+            scale = null;
+        }
         else
         {
+            length = null;
             precision = null;
             scale = null;
         }

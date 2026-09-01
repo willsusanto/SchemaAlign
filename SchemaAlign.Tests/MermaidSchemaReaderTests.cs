@@ -641,5 +641,69 @@ public class MermaidSchemaReaderTests
         var requestItem = schema.Tables["RequestItem"];
         requestItem.ForeignKeys.Should().HaveCount(2);
     }
+
+    [Fact]
+    public void Parse_AttributeWithForeignKeyFlag_SetsIsForeignKeyFlag()
+    {
+        var mermaid = """
+            erDiagram
+                SampleDependent {
+                    int Id PK
+                    string StatusCode FK
+                }
+            """;
+
+        var schema = _reader.Read(mermaid);
+        var table = schema.Tables["SampleDependent"];
+        table.Columns["StatusCode"].IsForeignKey.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Parse_RelationshipWithLabel_ResolvesCustomForeignKeyColumn()
+    {
+        var mermaid = """
+            erDiagram
+                SamplePrincipal {
+                    string IdPrincipalKey PK
+                    string Title
+                }
+                SampleDependent {
+                    int Id PK
+                    string CustomStatusCode FK
+                }
+                SamplePrincipal ||--o{ SampleDependent : CustomStatusCode
+            """;
+
+        var schema = _reader.Read(mermaid);
+        var dependent = schema.Tables["SampleDependent"];
+        dependent.ForeignKeys.Should().HaveCount(1);
+        var fk = dependent.ForeignKeys[0];
+        fk.PrincipalTable.Should().Be("SamplePrincipal");
+        fk.PrincipalColumn.Should().Be("IdPrincipalKey");
+        fk.DependentColumn.Should().Be("CustomStatusCode");
+    }
+
+    [Fact]
+    public void Parse_RelationshipWithPrefixIdColumn_ResolvesForeignKey()
+    {
+        var mermaid = """
+            erDiagram
+                SamplePrincipalEntity {
+                    string Id PK
+                }
+                SampleDependentEntity {
+                    int Id PK
+                    string IdSamplePrincipalEntity FK
+                }
+                SamplePrincipalEntity ||--o{ SampleDependentEntity : has
+            """;
+
+        var schema = _reader.Read(mermaid);
+        var dependent = schema.Tables["SampleDependentEntity"];
+        dependent.ForeignKeys.Should().HaveCount(1);
+        var fk = dependent.ForeignKeys[0];
+        fk.PrincipalTable.Should().Be("SamplePrincipalEntity");
+        fk.DependentColumn.Should().Be("IdSamplePrincipalEntity");
+    }
 }
 

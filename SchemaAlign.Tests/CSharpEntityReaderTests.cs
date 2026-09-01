@@ -475,6 +475,55 @@ public class CSharpEntityReaderTests
     }
 
     [Fact]
+    public void Read_ForeignKeyOnCustomNamedScalarProperty_ResolvesForeignKeyCorrectly()
+    {
+        var code = """
+            using System.ComponentModel.DataAnnotations;
+            using System.ComponentModel.DataAnnotations.Schema;
+
+            namespace MaskedApp.Models;
+
+            [Table("tbl_master_status")]
+            public class MasterStatusEntity
+            {
+                [Key]
+                [StringLength(36)]
+                public string IdStatusKey { get; set; }
+
+                [Required]
+                [StringLength(50)]
+                public string StatusDesc { get; set; }
+            }
+
+            [Table("tbl_transaction_record")]
+            public class TransactionRecordEntity
+            {
+                [Key]
+                public int Id { get; set; }
+
+                [Required]
+                [StringLength(36)]
+                [ForeignKey("StatusNavigation")]
+                public string CustomStatusReference { get; set; }
+
+                public virtual MasterStatusEntity StatusNavigation { get; set; }
+            }
+            """;
+
+        var schema = _reader.Read(code);
+
+        var txTable = schema.Tables["tbl_transaction_record"];
+        txTable.Columns.Should().NotContainKey("StatusNavigation");
+        txTable.Columns.Should().ContainKey("CustomStatusReference");
+
+        var fk = txTable.ForeignKeys.FirstOrDefault(f => f.PrincipalTable == "tbl_master_status");
+        fk.Should().NotBeNull();
+        fk!.DependentColumn.Should().Be("CustomStatusReference");
+        fk.PrincipalTable.Should().Be("tbl_master_status");
+        fk.PrincipalColumn.Should().Be("IdStatusKey");
+    }
+
+    [Fact]
     public void Read_XmlDocComments_ExtractsCommentsOnTablesAndColumns()
     {
         var code = """

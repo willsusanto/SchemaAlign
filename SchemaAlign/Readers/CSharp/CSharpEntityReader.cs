@@ -573,6 +573,24 @@ public class CSharpEntityReader : ISchemaReader
                             });
                         }
                     }
+                    else
+                    {
+                        // Inverse collection navigation property (e.g. ICollection<TrFine> Fines on MsCirculationStatus)
+                        var childFkCol = FindMatchingFkColumn(targetEntity.Table, classInfo.ClassName, table.Name);
+                        if (!string.IsNullOrWhiteSpace(childFkCol) && targetEntity.Table.FindColumn(childFkCol) != null)
+                        {
+                            var pkCol = table.PrimaryKeys.FirstOrDefault() ?? "Id";
+                            AddForeignKeyIfNotExists(targetEntity.Table, new ForeignKeySchema
+                            {
+                                ConstraintName = $"FK_{targetEntity.Table.Name}_{table.Name}_{childFkCol}",
+                                DependentTable = targetEntity.Table.Name,
+                                DependentColumn = childFkCol,
+                                PrincipalTable = table.Name,
+                                PrincipalColumn = pkCol,
+                                Cardinality = ForeignKeyCardinality.ManyToOne
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -580,14 +598,27 @@ public class CSharpEntityReader : ISchemaReader
 
     private static string? FindMatchingFkColumn(TableSchema table, string navPropName, string targetTableName)
     {
+        var singularNav = navPropName.TrimEnd('s', 'S');
+        var singularTarget = targetTableName.TrimEnd('s', 'S');
+
         var candidates = new[]
         {
             $"Id{navPropName}",
+            $"Id{singularNav}",
             $"{navPropName}Id",
+            $"{singularNav}Id",
             $"{navPropName}_Id",
+            $"{singularNav}_Id",
+            $"Id_{navPropName}",
+            $"Id_{singularNav}",
             $"Id{targetTableName}",
+            $"Id{singularTarget}",
             $"{targetTableName}Id",
-            $"{targetTableName}_Id"
+            $"{singularTarget}Id",
+            $"{targetTableName}_Id",
+            $"{singularTarget}_Id",
+            $"Id_{targetTableName}",
+            $"Id_{singularTarget}"
         };
 
         foreach (var candidate in candidates)
