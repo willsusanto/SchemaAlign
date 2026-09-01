@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C#: Launch SchemaAlign",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/SchemaAlign/bin/Debug/net10.0/SchemaAlign.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/SchemaAlign",
+            "stopAtEntry": false,
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "C#: Launch SchemaAlign (with arguments)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/SchemaAlign/bin/Debug/net10.0/SchemaAlign.dll",
+            "args": "${input:commandLineArgs}",
+            "cwd": "${workspaceFolder}/SchemaAlign",
+            "stopAtEntry": false,
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "C#: Attach to .NET Process",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "commandLineArgs",
+            "type": "promptString",
+            "description": "Enter command-line arguments for SchemaAlign:",
+            "default": ""
+        }
+    ]
+}
