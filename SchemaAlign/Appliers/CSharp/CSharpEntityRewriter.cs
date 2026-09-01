@@ -250,7 +250,10 @@ public class CSharpEntityRewriter : CSharpSyntaxRewriter
         string newline)
     {
         var typeStr = TypeMapper.ToCSharpType(col.Type, col.IsNullable);
-        var parsed = (PropertyDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration($"public {typeStr} {propName} {{ get; set; }}")!;
+        var initializer = (_options.UseNullableReferenceTypes && col.Type == StandardType.String && !col.IsNullable)
+            ? " = string.Empty;"
+            : "";
+        var parsed = (PropertyDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration($"public {typeStr} {propName} {{ get; set; }}{initializer}")!;
 
         var attrLists = new List<AttributeListSyntax>();
 
@@ -336,8 +339,11 @@ public class CSharpEntityRewriter : CSharpSyntaxRewriter
 
     private static AttributeListSyntax CreateAttributeList(string attributeText, string indent, string newline)
     {
-        var attr = SyntaxFactory.Attribute(SyntaxFactory.ParseName(attributeText));
-        return SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(attr))
+        var dummy = $"[{attributeText}]\nclass Dummy {{}}";
+        var parsed = (ClassDeclarationSyntax)SyntaxFactory.ParseCompilationUnit(dummy).Members[0];
+        var attrList = parsed.AttributeLists[0];
+
+        return attrList
             .WithLeadingTrivia(SyntaxFactory.Whitespace(indent))
             .WithTrailingTrivia(SyntaxFactory.Whitespace(newline));
     }

@@ -88,6 +88,30 @@ public class CSharpEntityApplier : ISchemaApplier
             }
         }
 
+        // 3. Handle Deleted Tables
+        if (csOptions.DeleteDroppedTables)
+        {
+            foreach (var delTableDiff in diff.DeletedTables)
+            {
+                var matchingFile = FindMatchingFile(existingFiles, delTableDiff.TableName);
+                if (matchingFile != null)
+                {
+                    var originalContent = await File.ReadAllTextAsync(matchingFile, cancellationToken);
+                    var relativePath = Path.GetRelativePath(targetDir, matchingFile);
+                    var unifiedDiff = UnifiedDiffGenerator.GenerateDiff(originalContent, null, relativePath);
+
+                    previews.Add(new FileDiffPreview
+                    {
+                        FilePath = matchingFile,
+                        DiffKind = DiffKind.Deleted,
+                        OriginalContent = originalContent,
+                        NewContent = null,
+                        UnifiedDiff = unifiedDiff
+                    });
+                }
+            }
+        }
+
         return previews;
     }
 

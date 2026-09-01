@@ -1,4 +1,6 @@
 using AwesomeAssertions;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using SchemaAlign.Appliers.CSharp;
 using SchemaAlign.Appliers.Diff;
 using SchemaAlign.Diff;
@@ -276,7 +278,7 @@ public class CSharpEntityApplierTests
 
         var updatedCode = _applier.ApplyToSource(originalCode, tableDiff);
 
-        updatedCode.Should().Contain("namespace MyApp.Entities\n{");
+        updatedCode.Replace("\r\n", "\n").Should().Contain("namespace MyApp.Entities\n{");
         updatedCode.Should().Contain("public string? Value { get; set; }");
     }
 
@@ -567,7 +569,7 @@ public class CSharpEntityApplierTests
 
         var updatedCode = _applier.ApplyToSource(originalCode, tableDiff);
 
-        updatedCode.Should().Contain("public class UnrelatedClass\n{\n    public string UnrelatedProp { get; set; }\n}");
+        updatedCode.Replace("\r\n", "\n").Should().Contain("public class UnrelatedClass\n{\n    public string UnrelatedProp { get; set; }\n}");
         updatedCode.Should().Contain("public int? NewProp { get; set; }");
     }
 
@@ -593,4 +595,195 @@ public class CSharpEntityApplierTests
 
         updatedCode.Should().Be(originalCode);
     }
+
+    [Fact]
+    public void GenerateEntitySource_MultipleForeignKeysSamePrincipalTable_DerivesDistinctNavigationPropertyNames()
+    {
+        var table = new TableSchema
+        {
+            Name = "WorkflowRequests"
+        };
+
+        table.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+        table.AddColumn(new ColumnSchema { Name = "IdRequester", Type = StandardType.Int, IsNullable = false });
+        table.AddColumn(new ColumnSchema { Name = "IdApprover", Type = StandardType.Int, IsNullable = true });
+
+        table.AddForeignKey(new ForeignKeySchema
+        {
+            ConstraintName = "FK_WorkflowRequests_Requester",
+            PrincipalTable = "Users",
+            PrincipalColumn = "Id",
+            DependentTable = "WorkflowRequests",
+            DependentColumn = "IdRequester",
+            Cardinality = ForeignKeyCardinality.ManyToOne
+        });
+
+        table.AddForeignKey(new ForeignKeySchema
+        {
+            ConstraintName = "FK_WorkflowRequests_Approver",
+            PrincipalTable = "Users",
+            PrincipalColumn = "Id",
+            DependentTable = "WorkflowRequests",
+            DependentColumn = "IdApprover",
+            Cardinality = ForeignKeyCardinality.ManyToOne
+        });
+
+        var generatedCode = _applier.GenerateEntitySource(table);
+
+        generatedCode.Should().Contain("[ForeignKey(\"IdRequester\")]");
+        generatedCode.Should().Contain("public virtual User? Requester { get; set; }");
+        generatedCode.Should().Contain("[ForeignKey(\"IdApprover\")]");
+        generatedCode.Should().Contain("public virtual User? Approver { get; set; }");
+    }
+
+    [Fact]
+    public async Task PreviewAndApplyAsync_WithDeleteDroppedTables_GeneratesDeletedDiffAndDeletesFile()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "SchemaAlign_DeleteTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var oldTableFilePath = Path.Combine(tempDir, "LegacyLog.cs");
+            var oldTableContent = """
+                namespace TestApp.Entities;
+
+                public class LegacyLog
+                {
+                    public int Id { get; set; }
+                }
+                """;
+            await File.WriteAllTextAsync(oldTableFilePath, oldTableContent);
+
+            var diff = new SchemaDiff();
+            diff.Tables.Add(new TableDiff
+            {
+                TableName = "LegacyLog",
+                Kind = DiffKind.Deleted,
+                Source = new TableSchema { Name = "LegacyLog" }
+            });
+
+            // Default options: DeleteDroppedTables is false -> no deleted previews
+            var defaultOptions = new CSharpApplierOptions { TargetDirectory = tempDir, DeleteDroppedTables = false };
+            var defaultPreviews = await _applier.PreviewAsync(diff, defaultOptions);
+            defaultPreviews.Should().BeEmpty();
+
+            // Opt-in: DeleteDroppedTables is true -> deleted preview generated
+            var deleteOptions = new CSharpApplierOptions { TargetDirectory = tempDir, DeleteDroppedTables = true };
+            var deletePreviews = await _applier.PreviewAsync(diff, deleteOptions);
+            deletePreviews.Should().HaveCount(1);
+            deletePreviews[0].DiffKind.Should().Be(DiffKind.Deleted);
+            deletePreviews[0].FilePath.Should().Be(oldTableFilePath);
+            deletePreviews[0].UnifiedDiff.Should().Contain("--- a/LegacyLog.cs");
+            deletePreviews[0].UnifiedDiff.Should().Contain("+++ /dev/null");
+
+            // Apply with DeleteDroppedTables = true
+            var result = await _applier.ApplyAsync(diff, deleteOptions);
+            result.Success.Should().BeTrue();
+            result.DeletedFiles.Should().Contain(oldTableFilePath);
+            File.Exists(oldTableFilePath).Should().BeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
+
+    [Fact]
+    public void ApplyToSource_AddingColumnWithAttributes_ProducesSyntacticallyValidAttributeArgumentListInAST()
+    {
+        var originalCode = """
+            namespace MyApp.Entities;
+
+            public class Item
+            {
+                public int Id { get; set; }
+            }
+            """;
+
+        var tableDiff = new TableDiff
+        {
+            TableName = "Item",
+            Kind = DiffKind.Modified
+        };
+
+        var col = new ColumnSchema
+        {
+            Name = "item_code",
+            Type = StandardType.String,
+            Length = 50,
+            IsNullable = false
+        };
+        tableDiff.Columns.Add(new ColumnDiff
+        {
+            ColumnName = "item_code",
+            Kind = DiffKind.Added,
+            Target = col
+        });
+
+        var updatedCode = _applier.ApplyToSource(originalCode, tableDiff);
+
+        var tree = CSharpSyntaxTree.ParseText(updatedCode);
+        var root = tree.GetCompilationUnitRoot();
+        var prop = root.DescendantNodes().OfType<PropertyDeclarationSyntax>().First(p => p.Identifier.Text == "ItemCode");
+
+        var columnAttr = prop.AttributeLists.SelectMany(al => al.Attributes).FirstOrDefault(a => a.Name.ToString() == "Column");
+        columnAttr.Should().NotBeNull();
+        columnAttr!.ArgumentList.Should().NotBeNull();
+        columnAttr.ArgumentList!.Arguments.Should().HaveCount(1);
+        columnAttr.ArgumentList.Arguments[0].Expression.ToString().Should().Be("\"item_code\"");
+
+        var maxLenAttr = prop.AttributeLists.SelectMany(al => al.Attributes).FirstOrDefault(a => a.Name.ToString() == "MaxLength");
+        maxLenAttr.Should().NotBeNull();
+        maxLenAttr!.ArgumentList.Should().NotBeNull();
+        maxLenAttr.ArgumentList!.Arguments[0].Expression.ToString().Should().Be("50");
+    }
+
+    [Fact]
+    public void ApplyToSource_AddingNonNullableStringColumn_AddsStringEmptyInitializerWhenNrtEnabled()
+    {
+        var originalCode = """
+            namespace MyApp.Entities;
+
+            public class Profile
+            {
+                public int Id { get; set; }
+            }
+            """;
+
+        var tableDiff = new TableDiff
+        {
+            TableName = "Profile",
+            Kind = DiffKind.Modified
+        };
+
+        var col = new ColumnSchema
+        {
+            Name = "Username",
+            Type = StandardType.String,
+            Length = 100,
+            IsNullable = false
+        };
+        tableDiff.Columns.Add(new ColumnDiff
+        {
+            ColumnName = "Username",
+            Kind = DiffKind.Added,
+            Target = col
+        });
+
+        var options = new CSharpApplierOptions { UseNullableReferenceTypes = true };
+        var updatedCode = _applier.ApplyToSource(originalCode, tableDiff, options);
+
+        updatedCode.Should().Contain("public string Username { get; set; } = string.Empty;");
+
+        var optionsNrtDisabled = new CSharpApplierOptions { UseNullableReferenceTypes = false };
+        var updatedCodeNrtDisabled = _applier.ApplyToSource(originalCode, tableDiff, optionsNrtDisabled);
+
+        updatedCodeNrtDisabled.Should().Contain("public string Username { get; set; }");
+        updatedCodeNrtDisabled.Should().NotContain("= string.Empty;");
+    }
 }
+

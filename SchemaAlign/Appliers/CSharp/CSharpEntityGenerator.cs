@@ -135,6 +135,8 @@ public static class CSharpEntityGenerator
         }
 
         // Foreign keys / Navigation properties
+        var usedPropNames = new HashSet<string>(table.Columns.Values.Select(c => NamingHelper.ToPascalCase(c.Name)), StringComparer.OrdinalIgnoreCase);
+
         foreach (var fk in table.ForeignKeys)
         {
             if (!first)
@@ -144,13 +146,20 @@ public static class CSharpEntityGenerator
             first = false;
 
             var principalClassName = NamingHelper.ToEntityClassName(fk.PrincipalTable);
-            var navPropName = principalClassName;
+            var navPropName = NamingHelper.ToNavigationPropertyName(fk.DependentColumn, fk.PrincipalTable);
 
-            // If navPropName is same as any column propName, avoid collision
-            if (table.Columns.Values.Any(c => string.Equals(NamingHelper.ToPascalCase(c.Name), navPropName, StringComparison.OrdinalIgnoreCase)))
+            if (usedPropNames.Contains(navPropName))
             {
                 navPropName += "Entity";
             }
+
+            var baseNavName = navPropName;
+            int counter = 1;
+            while (usedPropNames.Contains(navPropName))
+            {
+                navPropName = $"{baseNavName}{++counter}";
+            }
+            usedPropNames.Add(navPropName);
 
             var fkPropName = NamingHelper.ToPascalCase(fk.DependentColumn);
 

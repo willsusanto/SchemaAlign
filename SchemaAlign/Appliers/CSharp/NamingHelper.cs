@@ -87,4 +87,42 @@ public static class NamingHelper
 
         return word;
     }
+
+    public static string ToNavigationPropertyName(string fkColumnName, string? principalTable = null)
+    {
+        if (string.IsNullOrWhiteSpace(fkColumnName))
+        {
+            return !string.IsNullOrWhiteSpace(principalTable)
+                ? ToEntityClassName(principalTable)
+                : string.Empty;
+        }
+
+        var name = ToPascalCase(fkColumnName);
+
+        if (name.Equals("Id", StringComparison.OrdinalIgnoreCase))
+        {
+            return !string.IsNullOrWhiteSpace(principalTable)
+                ? ToEntityClassName(principalTable)
+                : name;
+        }
+
+        if (name.StartsWith("Id", StringComparison.Ordinal) && name.Length > 2 && char.IsUpper(name[2]))
+        {
+            name = name.Substring(2);
+        }
+        else if (name.EndsWith("Id", StringComparison.Ordinal) && name.Length > 2)
+        {
+            name = name.Substring(0, name.Length - 2);
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return !string.IsNullOrWhiteSpace(principalTable)
+                ? ToEntityClassName(principalTable)
+                : ToPascalCase(fkColumnName);
+        }
+
+        return name;
+    }
 }
+
