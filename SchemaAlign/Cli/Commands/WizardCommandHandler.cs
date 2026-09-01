@@ -4,6 +4,9 @@ using Spectre.Console;
 
 namespace SchemaAlign.Cli.Commands;
 
+/// <summary>
+/// Command handler for running the interactive CLI wizard when no subcommands are supplied.
+/// </summary>
 public class WizardCommandHandler
 {
     private readonly DiffCommandHandler _diffHandler;
@@ -26,6 +29,11 @@ public class WizardCommandHandler
         _inspectHandler = inspectHandler ?? new InspectCommandHandler(detection, _console);
     }
 
+    /// <summary>
+    /// Runs the interactive console wizard workflow.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public async Task<int> RunAsync(CancellationToken cancellationToken = default)
     {
         _console.Write(new FigletText("SchemaAlign").Color(Color.Cyan1));

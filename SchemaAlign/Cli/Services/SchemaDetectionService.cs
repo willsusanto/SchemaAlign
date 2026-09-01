@@ -5,8 +5,18 @@ using SchemaAlign.Readers.Mermaid;
 
 namespace SchemaAlign.Cli.Services;
 
+/// <summary>
+/// Service for detecting schema formats and reading database schemas from files, directories, or connection strings.
+/// </summary>
 public class SchemaDetectionService
 {
+    /// <summary>
+    /// Detects and returns an appropriate <see cref="ISchemaReader"/> for the given path or connection string.
+    /// </summary>
+    /// <param name="pathOrConnectionString">The file path, directory, or database connection string.</param>
+    /// <returns>A schema reader instance capable of parsing the source.</returns>
+    /// <exception cref="ArgumentException">Thrown when the input path or connection string is empty.</exception>
+    /// <exception cref="NotSupportedException">Thrown when the format is unsupported or the required reader is unavailable.</exception>
     public virtual ISchemaReader DetectReader(string pathOrConnectionString)
     {
         if (string.IsNullOrWhiteSpace(pathOrConnectionString))
@@ -60,6 +70,11 @@ public class SchemaDetectionService
         throw new NotSupportedException($"Schema format for '{pathOrConnectionString}' is not supported. Supported formats: .mmd, .mermaid, .cs, C# entity directory, .sql, or SQL connection strings.");
     }
 
+    /// <summary>
+    /// Detects the <see cref="TargetType"/> represented by the given path or connection string.
+    /// </summary>
+    /// <param name="pathOrConnectionString">The file path, directory, or database connection string.</param>
+    /// <returns>The detected <see cref="TargetType"/>, or <see cref="TargetType.Unknown"/> if not recognized.</returns>
     public virtual TargetType DetectTargetType(string pathOrConnectionString)
     {
         if (string.IsNullOrWhiteSpace(pathOrConnectionString))
@@ -95,6 +110,15 @@ public class SchemaDetectionService
         return TargetType.Unknown;
     }
 
+    /// <summary>
+    /// Reads and parses a database schema from the specified path or connection string.
+    /// </summary>
+    /// <param name="pathOrConnectionString">The file path, directory, or database connection string.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A <see cref="DatabaseSchema"/> representing the parsed schema.</returns>
+    /// <exception cref="ArgumentException">Thrown when the input path or connection string is empty.</exception>
+    /// <exception cref="FileNotFoundException">Thrown when the specified file does not exist.</exception>
+    /// <exception cref="NotSupportedException">Thrown when the format is unsupported or required reader is unavailable.</exception>
     public virtual async Task<DatabaseSchema> ReadSchemaAsync(string pathOrConnectionString, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(pathOrConnectionString))

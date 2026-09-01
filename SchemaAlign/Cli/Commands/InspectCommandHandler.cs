@@ -5,12 +5,25 @@ using Spectre.Console;
 
 namespace SchemaAlign.Cli.Commands;
 
+/// <summary>
+/// Options for configuring the schema inspect command.
+/// </summary>
 public class InspectCommandOptions
 {
+    /// <summary>
+    /// Path to schema file or directory to inspect.
+    /// </summary>
     public string Source { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Output format ('console' or 'json').
+    /// </summary>
     public string Output { get; set; } = "console";
 }
 
+/// <summary>
+/// Command handler for inspecting and displaying parsed schema tables and columns.
+/// </summary>
 public class InspectCommandHandler
 {
     private readonly SchemaDetectionService _detectionService;
@@ -22,6 +35,12 @@ public class InspectCommandHandler
         _console = console ?? AnsiConsole.Console;
     }
 
+    /// <summary>
+    /// Runs the inspect command asynchronously with the provided options.
+    /// </summary>
+    /// <param name="options">Inspect command options.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public virtual async Task<int> RunAsync(InspectCommandOptions options, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(options.Source))

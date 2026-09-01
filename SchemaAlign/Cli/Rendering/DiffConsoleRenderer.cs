@@ -5,8 +5,17 @@ using Spectre.Console;
 
 namespace SchemaAlign.Cli.Rendering;
 
+/// <summary>
+/// Renders schema diff summaries and detailed change trees to Spectre.Console, Markdown, or JSON.
+/// </summary>
 public static class DiffConsoleRenderer
 {
+    /// <summary>
+    /// Renders a colorized overview panel, summary table, and optional detailed change tree to the console.
+    /// </summary>
+    /// <param name="diff">The schema diff to render.</param>
+    /// <param name="console">The AnsiConsole instance.</param>
+    /// <param name="detailed">Whether to render the detailed change tree.</param>
     public static void RenderConsole(SchemaDiff diff, IAnsiConsole console, bool detailed = false)
     {
         if (!diff.HasChanges)
@@ -83,6 +92,11 @@ public static class DiffConsoleRenderer
         }
     }
 
+    /// <summary>
+    /// Renders a detailed property-level change tree to the console.
+    /// </summary>
+    /// <param name="diff">The schema diff to render.</param>
+    /// <param name="console">The AnsiConsole instance.</param>
     public static void RenderDetailedTree(SchemaDiff diff, IAnsiConsole console)
     {
         var root = new Tree("[bold underline]Detailed Changes[/]");
@@ -144,6 +158,11 @@ public static class DiffConsoleRenderer
         console.Write(root);
     }
 
+    /// <summary>
+    /// Renders the schema diff summary formatted as Markdown.
+    /// </summary>
+    /// <param name="diff">The schema diff to render.</param>
+    /// <returns>A markdown formatted string.</returns>
     public static string RenderMarkdown(SchemaDiff diff)
     {
         var sb = new StringBuilder();
@@ -166,6 +185,11 @@ public static class DiffConsoleRenderer
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Renders the schema diff summary formatted as indented JSON.
+    /// </summary>
+    /// <param name="diff">The schema diff to render.</param>
+    /// <returns>A JSON string representation of the diff.</returns>
     public static string RenderJson(SchemaDiff diff)
     {
         var payload = new

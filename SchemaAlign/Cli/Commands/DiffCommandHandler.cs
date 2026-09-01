@@ -6,15 +6,40 @@ using Spectre.Console;
 
 namespace SchemaAlign.Cli.Commands;
 
+/// <summary>
+/// Options for configuring the schema diff command.
+/// </summary>
 public class DiffCommandOptions
 {
+    /// <summary>
+    /// Path to current/base schema.
+    /// </summary>
     public string Source { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Path to desired/target schema.
+    /// </summary>
     public string Target { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Diff mode ('incremental' or 'snapshot').
+    /// </summary>
     public string Mode { get; set; } = "incremental";
+
+    /// <summary>
+    /// Output format ('console', 'json', or 'markdown').
+    /// </summary>
     public string Output { get; set; } = "console";
+
+    /// <summary>
+    /// Whether to display a detailed property-level change tree.
+    /// </summary>
     public bool Detailed { get; set; } = false;
 }
 
+/// <summary>
+/// Command handler for comparing base and target schemas non-destructively.
+/// </summary>
 public class DiffCommandHandler
 {
     private readonly SchemaDetectionService _detectionService;
@@ -26,6 +51,12 @@ public class DiffCommandHandler
         _console = console ?? AnsiConsole.Console;
     }
 
+    /// <summary>
+    /// Runs the diff command asynchronously with the provided options.
+    /// </summary>
+    /// <param name="options">Diff command options.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public virtual async Task<int> RunAsync(DiffCommandOptions options, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(options.Source))
@@ -54,6 +85,13 @@ public class DiffCommandHandler
         }
     }
 
+    /// <summary>
+    /// Calculates the schema diff and renders the output according to the specified options.
+    /// </summary>
+    /// <param name="sourceSchema">Base schema.</param>
+    /// <param name="targetSchema">Desired target schema.</param>
+    /// <param name="options">Diff options.</param>
+    /// <returns>Exit code (0 for success).</returns>
     public int Execute(DatabaseSchema sourceSchema, DatabaseSchema targetSchema, DiffCommandOptions options)
     {
         var isSnapshot = string.Equals(options.Mode, "snapshot", StringComparison.OrdinalIgnoreCase);

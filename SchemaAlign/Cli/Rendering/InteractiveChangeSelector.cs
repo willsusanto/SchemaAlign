@@ -3,6 +3,9 @@ using Spectre.Console;
 
 namespace SchemaAlign.Cli.Rendering;
 
+/// <summary>
+/// Specifies the type of change represented by an interactive checklist item.
+/// </summary>
 public enum ChangeItemKind
 {
     AddTable,
@@ -15,22 +18,64 @@ public enum ChangeItemKind
     DropForeignKey
 }
 
+/// <summary>
+/// Represents a granular, selectable schema change item in the interactive CLI checklist.
+/// </summary>
 public class ChangeItem
 {
+    /// <summary>
+    /// Unique identifier for this change item.
+    /// </summary>
     public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Markup display text for Spectre.Console selection.
+    /// </summary>
     public string DisplayText { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Target table name associated with this change.
+    /// </summary>
     public string TableName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Kind of change represented.
+    /// </summary>
     public ChangeItemKind Kind { get; set; }
+
+    /// <summary>
+    /// True if the change is a destructive drop operation.
+    /// </summary>
     public bool IsDestructive => Kind == ChangeItemKind.DropTable || Kind == ChangeItemKind.DropColumn || Kind == ChangeItemKind.DropForeignKey;
+
+    /// <summary>
+    /// Associated column diff, if applicable.
+    /// </summary>
     public ColumnDiff? ColumnDiff { get; set; }
+
+    /// <summary>
+    /// Associated foreign key diff, if applicable.
+    /// </summary>
     public ForeignKeyDiff? ForeignKeyDiff { get; set; }
+
+    /// <summary>
+    /// Associated table diff, if applicable.
+    /// </summary>
     public TableDiff? TableDiff { get; set; }
 
     public override string ToString() => DisplayText;
 }
 
+/// <summary>
+/// Helper for converting schema diffs into interactive multi-select checklists and applying selections.
+/// </summary>
 public static class InteractiveChangeSelector
 {
+    /// <summary>
+    /// Flattens a <see cref="SchemaDiff"/> into a list of granular <see cref="ChangeItem"/> entries.
+    /// </summary>
+    /// <param name="diff">The schema diff to flatten.</param>
+    /// <returns>A list of change items.</returns>
     public static List<ChangeItem> FlattenChanges(SchemaDiff diff)
     {
         var items = new List<ChangeItem>();
@@ -148,6 +193,13 @@ public static class InteractiveChangeSelector
         return items;
     }
 
+    /// <summary>
+    /// Prompts the user with an interactive multi-select checklist to toggle changes before applying.
+    /// </summary>
+    /// <param name="diff">The schema diff containing candidate changes.</param>
+    /// <param name="console">The AnsiConsole instance.</param>
+    /// <param name="preselectDrops">Whether destructive drop changes should be selected by default.</param>
+    /// <returns>A new <see cref="SchemaDiff"/> containing only the user-selected changes.</returns>
     public static SchemaDiff PromptSelection(SchemaDiff diff, IAnsiConsole console, bool preselectDrops = false)
     {
         var items = FlattenChanges(diff);
@@ -173,6 +225,12 @@ public static class InteractiveChangeSelector
         return ApplySelection(diff, selectedItems);
     }
 
+    /// <summary>
+    /// Filters the schema diff by retaining only the changes specified by the selected change items.
+    /// </summary>
+    /// <param name="diff">The original schema diff.</param>
+    /// <param name="selectedItems">The selected change items.</param>
+    /// <returns>A filtered schema diff.</returns>
     public static SchemaDiff ApplySelection(SchemaDiff diff, IEnumerable<ChangeItem> selectedItems)
     {
         var selectedSet = new HashSet<string>(selectedItems.Select(x => x.Id));

@@ -3,8 +3,19 @@ using SchemaAlign.Cli.Commands;
 
 namespace SchemaAlign.Cli;
 
+/// <summary>
+/// Configures System.CommandLine root command, subcommands, options, and handlers for SchemaAlign.
+/// </summary>
 public static class CommandLineConfiguration
 {
+    /// <summary>
+    /// Creates and configures the root CLI command with diff, sync, inspect, and wizard commands.
+    /// </summary>
+    /// <param name="diffHandler">Optional custom handler for the diff command.</param>
+    /// <param name="syncHandler">Optional custom handler for the sync command.</param>
+    /// <param name="inspectHandler">Optional custom handler for the inspect command.</param>
+    /// <param name="wizardHandler">Optional custom handler for the wizard command.</param>
+    /// <returns>A configured <see cref="RootCommand"/> ready for parsing and invocation.</returns>
     public static RootCommand CreateRootCommand(
         DiffCommandHandler? diffHandler = null,
         SyncCommandHandler? syncHandler = null,

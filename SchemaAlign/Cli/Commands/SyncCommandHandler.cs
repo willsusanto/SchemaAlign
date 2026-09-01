@@ -7,18 +7,55 @@ using Spectre.Console;
 
 namespace SchemaAlign.Cli.Commands;
 
+/// <summary>
+/// Options for configuring the schema sync command.
+/// </summary>
 public class SyncCommandOptions
 {
+    /// <summary>
+    /// Path to current/base schema to be updated.
+    /// </summary>
     public string Source { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Path to desired/target schema to align toward.
+    /// </summary>
     public string Target { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Diff mode ('incremental' or 'snapshot').
+    /// </summary>
     public string Mode { get; set; } = "incremental";
+
+    /// <summary>
+    /// Whether destructive drops (DROP TABLE, DROP COLUMN) are permitted.
+    /// </summary>
     public bool AllowDrop { get; set; } = false;
+
+    /// <summary>
+    /// Whether to run interactive checklist prompt to toggle individual changes.
+    /// </summary>
     public bool Interactive { get; set; } = true;
+
+    /// <summary>
+    /// Whether to generate and preview diffs without writing modifications to disk.
+    /// </summary>
     public bool DryRun { get; set; } = false;
+
+    /// <summary>
+    /// Whether to apply changes non-interactively without confirmation prompt.
+    /// </summary>
     public bool Yes { get; set; } = false;
+
+    /// <summary>
+    /// Optional override for the target schema type.
+    /// </summary>
     public TargetType? TargetTypeOverride { get; set; }
 }
 
+/// <summary>
+/// Command handler for synchronizing current base schema to match desired target schema.
+/// </summary>
 public class SyncCommandHandler
 {
     private readonly ApplierRegistry _applierRegistry;
@@ -32,6 +69,12 @@ public class SyncCommandHandler
         _console = console ?? AnsiConsole.Console;
     }
 
+    /// <summary>
+    /// Runs the sync command asynchronously with the provided options.
+    /// </summary>
+    /// <param name="options">Sync command options.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public virtual async Task<int> RunAsync(SyncCommandOptions options, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(options.Source))
@@ -62,6 +105,15 @@ public class SyncCommandHandler
         }
     }
 
+    /// <summary>
+    /// Executes the schema synchronization pipeline including diff calculation, interactive selection, preview, and application.
+    /// </summary>
+    /// <param name="sourceSchema">Base schema.</param>
+    /// <param name="targetSchema">Desired target schema.</param>
+    /// <param name="options">Sync command options.</param>
+    /// <param name="targetType">Detected or overridden target type.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public async Task<int> ExecuteAsync(DatabaseSchema sourceSchema, DatabaseSchema targetSchema, SyncCommandOptions options, TargetType targetType, CancellationToken cancellationToken = default)
     {
         var isSnapshot = string.Equals(options.Mode, "snapshot", StringComparison.OrdinalIgnoreCase);

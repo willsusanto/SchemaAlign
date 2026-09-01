@@ -2,8 +2,16 @@ using SchemaAlign.Diff;
 
 namespace SchemaAlign.Cli.Rendering;
 
+/// <summary>
+/// Utility for detecting and filtering destructive schema changes.
+/// </summary>
 public static class DiffFilter
 {
+    /// <summary>
+    /// Checks whether the schema diff contains any destructive modifications (dropped tables, dropped columns, or dropped foreign keys).
+    /// </summary>
+    /// <param name="diff">The schema diff to inspect.</param>
+    /// <returns>True if destructive changes exist; otherwise, false.</returns>
     public static bool HasDestructiveChanges(SchemaDiff diff)
     {
         if (diff.DeletedTables.Any())
@@ -18,6 +26,12 @@ public static class DiffFilter
         return false;
     }
 
+    /// <summary>
+    /// Filters a schema diff to exclude destructive drop operations when allowDrops is false.
+    /// </summary>
+    /// <param name="diff">The original schema diff.</param>
+    /// <param name="allowDrops">Whether drops should be preserved.</param>
+    /// <returns>A filtered schema diff.</returns>
     public static SchemaDiff Filter(SchemaDiff diff, bool allowDrops)
     {
         if (allowDrops)

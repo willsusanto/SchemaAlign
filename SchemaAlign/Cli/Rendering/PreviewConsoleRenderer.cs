@@ -3,8 +3,16 @@ using Spectre.Console;
 
 namespace SchemaAlign.Cli.Rendering;
 
+/// <summary>
+/// Renders unified diff previews in colorized Spectre.Console panels.
+/// </summary>
 public static class PreviewConsoleRenderer
 {
+    /// <summary>
+    /// Renders unified diff previews for a list of file diffs to the console.
+    /// </summary>
+    /// <param name="previews">Collection of file diff previews.</param>
+    /// <param name="console">The AnsiConsole instance.</param>
     public static void RenderPreviews(IReadOnlyList<FileDiffPreview> previews, IAnsiConsole console)
     {
         if (previews.Count == 0)
