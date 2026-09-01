@@ -1,8 +1,8 @@
-using FluentAssertions;
 using SchemaAlign.Models;
 using SchemaAlign.Readers;
 using SchemaAlign.Readers.Mermaid;
 using Xunit;
+
 
 namespace SchemaAlign.Tests;
 
