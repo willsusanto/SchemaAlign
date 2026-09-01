@@ -3,8 +3,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using SchemaAlign.Appliers.CSharp;
+using SchemaAlign.Diff;
 using SchemaAlign.Models;
-using SchemaAlign.Models.Diff;
 using SchemaAlign.Models.TypeMapping;
 
 namespace SchemaAlign.Appliers.CSharp;
@@ -67,9 +67,9 @@ public class CSharpEntityRewriter : CSharpSyntaxRewriter
 
                 // Find matching column diff
                 var colDiff = FindMatchingColumnDiff(prop, _tableDiff);
-                if (colDiff != null && colDiff.DiffType == DiffType.Modified && colDiff.SourceColumn != null)
+                if (colDiff != null && colDiff.Kind == DiffKind.Modified && (colDiff.Target ?? colDiff.Source) != null)
                 {
-                    var updatedProp = UpdateProperty(prop, colDiff.SourceColumn, memberIndent, newline);
+                    var updatedProp = UpdateProperty(prop, colDiff.Target ?? colDiff.Source!, memberIndent, newline);
                     updatedMembers.Add(updatedProp);
                     continue;
                 }
@@ -81,7 +81,7 @@ public class CSharpEntityRewriter : CSharpSyntaxRewriter
         // 2. Add new properties for added columns
         foreach (var colDiff in _tableDiff.AddedColumns)
         {
-            var col = colDiff.SourceColumn;
+            var col = colDiff.Target ?? colDiff.Source;
             if (col == null) continue;
 
             var propName = NamingHelper.ToPascalCase(col.Name);
@@ -137,16 +137,17 @@ public class CSharpEntityRewriter : CSharpSyntaxRewriter
     {
         var propName = prop.Identifier.Text;
 
-        if (tableDiff.ColumnDiffs.TryGetValue(propName, out var diff))
+        var exact = tableDiff.Columns.FirstOrDefault(c => string.Equals(c.ColumnName, propName, StringComparison.OrdinalIgnoreCase));
+        if (exact != null)
         {
-            return diff;
+            return exact;
         }
 
         // Check if matching PascalCase
-        foreach (var (colName, cDiff) in tableDiff.ColumnDiffs)
+        foreach (var cDiff in tableDiff.Columns)
         {
-            if (string.Equals(NamingHelper.ToPascalCase(colName), propName, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(colName, propName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(NamingHelper.ToPascalCase(cDiff.ColumnName), propName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(cDiff.ColumnName, propName, StringComparison.OrdinalIgnoreCase))
             {
                 return cDiff;
             }
@@ -164,9 +165,10 @@ public class CSharpEntityRewriter : CSharpSyntaxRewriter
                     if (firstArg != null)
                     {
                         var argVal = firstArg.Expression.ToString().Trim('"', '\'');
-                        if (tableDiff.ColumnDiffs.TryGetValue(argVal, out var matchDiff))
+                        var match = tableDiff.Columns.FirstOrDefault(c => string.Equals(c.ColumnName, argVal, StringComparison.OrdinalIgnoreCase));
+                        if (match != null)
                         {
-                            return matchDiff;
+                            return match;
                         }
                     }
                 }

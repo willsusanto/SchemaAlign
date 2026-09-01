@@ -1,8 +1,8 @@
-using FluentAssertions;
+using AwesomeAssertions;
 using SchemaAlign.Appliers.CSharp;
 using SchemaAlign.Appliers.Diff;
+using SchemaAlign.Diff;
 using SchemaAlign.Models;
-using SchemaAlign.Models.Diff;
 using Xunit;
 
 namespace SchemaAlign.Tests;
@@ -38,7 +38,7 @@ public class CSharpEntityApplierTests
         var tableDiff = new TableDiff
         {
             TableName = "User",
-            DiffType = DiffType.Modified
+            Kind = DiffKind.Modified
         };
 
         var newCol = new ColumnSchema
@@ -49,7 +49,12 @@ public class CSharpEntityApplierTests
             IsNullable = true,
             Comment = "User email address"
         };
-        tableDiff.ColumnDiffs["Email"] = ColumnDiff.Added(newCol);
+        tableDiff.Columns.Add(new ColumnDiff
+        {
+            ColumnName = "Email",
+            Kind = DiffKind.Added,
+            Target = newCol
+        });
 
         var updatedCode = _applier.ApplyToSource(originalCode, tableDiff);
 
@@ -82,16 +87,30 @@ public class CSharpEntityApplierTests
         var tableDiff = new TableDiff
         {
             TableName = "Product",
-            DiffType = DiffType.Modified
+            Kind = DiffKind.Modified
         };
 
-        var srcId = new ColumnSchema { Name = "Id", Type = StandardType.BigInt, IsPrimaryKey = true };
-        var tgtId = new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true };
-        tableDiff.ColumnDiffs["Id"] = ColumnDiff.Compare(srcId, tgtId)!;
+        var srcId = new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true };
+        var tgtId = new ColumnSchema { Name = "Id", Type = StandardType.BigInt, IsPrimaryKey = true };
+        tableDiff.Columns.Add(new ColumnDiff
+        {
+            ColumnName = "Id",
+            Kind = DiffKind.Modified,
+            Source = srcId,
+            Target = tgtId,
+            Changes = ChangeDetail.TypeChanged
+        });
 
-        var srcDesc = new ColumnSchema { Name = "Description", Type = StandardType.String, IsNullable = true };
-        var tgtDesc = new ColumnSchema { Name = "Description", Type = StandardType.String, IsNullable = false };
-        tableDiff.ColumnDiffs["Description"] = ColumnDiff.Compare(srcDesc, tgtDesc)!;
+        var srcDesc = new ColumnSchema { Name = "Description", Type = StandardType.String, IsNullable = false };
+        var tgtDesc = new ColumnSchema { Name = "Description", Type = StandardType.String, IsNullable = true };
+        tableDiff.Columns.Add(new ColumnDiff
+        {
+            ColumnName = "Description",
+            Kind = DiffKind.Modified,
+            Source = srcDesc,
+            Target = tgtDesc,
+            Changes = ChangeDetail.NullabilityChanged
+        });
 
         var updatedCode = _applier.ApplyToSource(originalCode, tableDiff);
 
@@ -117,12 +136,19 @@ public class CSharpEntityApplierTests
         var tableDiff = new TableDiff
         {
             TableName = "Customer",
-            DiffType = DiffType.Modified
+            Kind = DiffKind.Modified
         };
 
-        var srcId = new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true, IsIdentity = true };
-        var tgtId = new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = false, IsIdentity = false };
-        tableDiff.ColumnDiffs["Id"] = ColumnDiff.Compare(srcId, tgtId)!;
+        var srcId = new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = false, IsIdentity = false };
+        var tgtId = new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true, IsIdentity = true };
+        tableDiff.Columns.Add(new ColumnDiff
+        {
+            ColumnName = "Id",
+            Kind = DiffKind.Modified,
+            Source = srcId,
+            Target = tgtId,
+            Changes = ChangeDetail.KeyStatusChanged | ChangeDetail.IdentityChanged
+        });
 
         var updatedCode = _applier.ApplyToSource(originalCode, tableDiff);
 
@@ -147,7 +173,7 @@ public class CSharpEntityApplierTests
         var tableDiff = new TableDiff
         {
             TableName = "Employee",
-            DiffType = DiffType.Modified
+            Kind = DiffKind.Modified
         };
 
         var col = new ColumnSchema
@@ -157,7 +183,12 @@ public class CSharpEntityApplierTests
             Length = 20,
             IsNullable = false
         };
-        tableDiff.ColumnDiffs["emp_code"] = ColumnDiff.Added(col);
+        tableDiff.Columns.Add(new ColumnDiff
+        {
+            ColumnName = "emp_code",
+            Kind = DiffKind.Added,
+            Target = col
+        });
 
         var updatedCode = _applier.ApplyToSource(originalCode, tableDiff);
 
@@ -187,7 +218,7 @@ public class CSharpEntityApplierTests
         var tableDiff = new TableDiff
         {
             TableName = "Invoice",
-            DiffType = DiffType.Modified
+            Kind = DiffKind.Modified
         };
 
         var col = new ColumnSchema
@@ -197,7 +228,12 @@ public class CSharpEntityApplierTests
             Precision = 18,
             Scale = 2
         };
-        tableDiff.ColumnDiffs["Amount"] = ColumnDiff.Added(col);
+        tableDiff.Columns.Add(new ColumnDiff
+        {
+            ColumnName = "Amount",
+            Kind = DiffKind.Added,
+            Target = col
+        });
 
         var updatedCode = _applier.ApplyToSource(originalCode, tableDiff);
 
@@ -222,7 +258,7 @@ public class CSharpEntityApplierTests
         var tableDiff = new TableDiff
         {
             TableName = "Setting",
-            DiffType = DiffType.Modified
+            Kind = DiffKind.Modified
         };
 
         var col = new ColumnSchema
@@ -231,7 +267,12 @@ public class CSharpEntityApplierTests
             Type = StandardType.String,
             IsNullable = true
         };
-        tableDiff.ColumnDiffs["Value"] = ColumnDiff.Added(col);
+        tableDiff.Columns.Add(new ColumnDiff
+        {
+            ColumnName = "Value",
+            Kind = DiffKind.Added,
+            Target = col
+        });
 
         var updatedCode = _applier.ApplyToSource(originalCode, tableDiff);
 
@@ -373,21 +414,31 @@ public class CSharpEntityApplierTests
             var diff = new SchemaDiff();
 
             // Modified table User: add Email
-            var userTableDiff = new TableDiff { TableName = "User", DiffType = DiffType.Modified };
-            userTableDiff.ColumnDiffs["Email"] = ColumnDiff.Added(new ColumnSchema
+            var userTableDiff = new TableDiff { TableName = "User", Kind = DiffKind.Modified };
+            userTableDiff.Columns.Add(new ColumnDiff
             {
-                Name = "Email",
-                Type = StandardType.String,
-                Length = 100,
-                IsNullable = true
+                ColumnName = "Email",
+                Kind = DiffKind.Added,
+                Target = new ColumnSchema
+                {
+                    Name = "Email",
+                    Type = StandardType.String,
+                    Length = 100,
+                    IsNullable = true
+                }
             });
-            diff.AddTableDiff(userTableDiff);
+            diff.Tables.Add(userTableDiff);
 
             // Added table Role
             var roleTable = new TableSchema { Name = "Roles" };
             roleTable.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
             roleTable.AddColumn(new ColumnSchema { Name = "Name", Type = StandardType.String, Length = 50 });
-            diff.AddTableDiff(TableDiff.Added(roleTable));
+            diff.Tables.Add(new TableDiff
+            {
+                TableName = "Roles",
+                Kind = DiffKind.Added,
+                Target = roleTable
+            });
 
             var options = new CSharpApplierOptions
             {
@@ -400,12 +451,12 @@ public class CSharpEntityApplierTests
             previews.Should().HaveCount(2);
 
             var userPreview = previews.Single(p => p.FilePath.EndsWith("User.cs"));
-            userPreview.DiffType.Should().Be(DiffType.Modified);
+            userPreview.DiffKind.Should().Be(DiffKind.Modified);
             userPreview.NewContent.Should().Contain("Email");
             userPreview.UnifiedDiff.Should().Contain("+    public string? Email { get; set; }");
 
             var rolePreview = previews.Single(p => p.FilePath.EndsWith("Role.cs") || p.FilePath.EndsWith("Roles.cs"));
-            rolePreview.DiffType.Should().Be(DiffType.Added);
+            rolePreview.DiffKind.Should().Be(DiffKind.Added);
             rolePreview.UnifiedDiff.Should().Contain("--- /dev/null");
 
             // Verify files on disk before apply (User.cs should NOT have Email yet)
@@ -454,7 +505,7 @@ public class CSharpEntityApplierTests
         var tableDiff = new TableDiff
         {
             TableName = "AuditLog",
-            DiffType = DiffType.Modified
+            Kind = DiffKind.Modified
         };
 
         var col = new ColumnSchema
@@ -464,7 +515,12 @@ public class CSharpEntityApplierTests
             Length = 100,
             IsNullable = false
         };
-        tableDiff.ColumnDiffs["Action"] = ColumnDiff.Added(col);
+        tableDiff.Columns.Add(new ColumnDiff
+        {
+            ColumnName = "Action",
+            Kind = DiffKind.Added,
+            Target = col
+        });
 
         var updatedCode = _applier.ApplyToSource(originalCode, tableDiff);
 
@@ -493,7 +549,7 @@ public class CSharpEntityApplierTests
         var tableDiff = new TableDiff
         {
             TableName = "TargetClass",
-            DiffType = DiffType.Modified
+            Kind = DiffKind.Modified
         };
 
         var col = new ColumnSchema
@@ -502,7 +558,12 @@ public class CSharpEntityApplierTests
             Type = StandardType.Int,
             IsNullable = true
         };
-        tableDiff.ColumnDiffs["NewProp"] = ColumnDiff.Added(col);
+        tableDiff.Columns.Add(new ColumnDiff
+        {
+            ColumnName = "NewProp",
+            Kind = DiffKind.Added,
+            Target = col
+        });
 
         var updatedCode = _applier.ApplyToSource(originalCode, tableDiff);
 
@@ -525,7 +586,7 @@ public class CSharpEntityApplierTests
         var tableDiff = new TableDiff
         {
             TableName = "Account",
-            DiffType = DiffType.None
+            Kind = DiffKind.Unchanged
         };
 
         var updatedCode = _applier.ApplyToSource(originalCode, tableDiff);

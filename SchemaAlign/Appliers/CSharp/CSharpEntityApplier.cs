@@ -1,6 +1,6 @@
 using SchemaAlign.Appliers.Diff;
+using SchemaAlign.Diff;
 using SchemaAlign.Models;
-using SchemaAlign.Models.Diff;
 
 namespace SchemaAlign.Appliers.CSharp;
 
@@ -42,7 +42,7 @@ public class CSharpEntityApplier : ISchemaApplier
         // 1. Handle Added Tables
         foreach (var addedTableDiff in diff.AddedTables)
         {
-            var table = addedTableDiff.SourceTable;
+            var table = addedTableDiff.Target ?? addedTableDiff.Source;
             if (table == null) continue;
 
             var className = NamingHelper.ToEntityClassName(table.Name);
@@ -55,7 +55,7 @@ public class CSharpEntityApplier : ISchemaApplier
             previews.Add(new FileDiffPreview
             {
                 FilePath = targetFilePath,
-                DiffType = DiffType.Added,
+                DiffKind = DiffKind.Added,
                 OriginalContent = null,
                 NewContent = generatedContent,
                 UnifiedDiff = unifiedDiff
@@ -79,7 +79,7 @@ public class CSharpEntityApplier : ISchemaApplier
                     previews.Add(new FileDiffPreview
                     {
                         FilePath = matchingFile,
-                        DiffType = DiffType.Modified,
+                        DiffKind = DiffKind.Modified,
                         OriginalContent = originalContent,
                         NewContent = updatedContent,
                         UnifiedDiff = unifiedDiff
@@ -122,17 +122,17 @@ public class CSharpEntityApplier : ISchemaApplier
                     Directory.CreateDirectory(dir);
                 }
 
-                if (preview.DiffType == DiffType.Added)
+                if (preview.DiffKind == DiffKind.Added)
                 {
                     await File.WriteAllTextAsync(targetFile, preview.NewContent ?? string.Empty, cancellationToken);
                     result.CreatedFiles.Add(targetFile);
                 }
-                else if (preview.DiffType == DiffType.Modified)
+                else if (preview.DiffKind == DiffKind.Modified)
                 {
                     await File.WriteAllTextAsync(targetFile, preview.NewContent ?? string.Empty, cancellationToken);
                     result.ChangedFiles.Add(targetFile);
                 }
-                else if (preview.DiffType == DiffType.Deleted && File.Exists(targetFile))
+                else if (preview.DiffKind == DiffKind.Deleted && File.Exists(targetFile))
                 {
                     File.Delete(targetFile);
                     result.DeletedFiles.Add(targetFile);

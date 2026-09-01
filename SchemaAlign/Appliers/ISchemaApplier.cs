@@ -1,4 +1,4 @@
-using SchemaAlign.Models.Diff;
+using SchemaAlign.Diff;
 
 namespace SchemaAlign.Appliers;
 
