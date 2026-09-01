@@ -31,6 +31,11 @@ public class ApplierResult
     public List<string> Errors { get; set; } = new();
 
     /// <summary>
+    /// List of non-fatal warnings generated during application.
+    /// </summary>
+    public List<string> Warnings { get; set; } = new();
+
+    /// <summary>
     /// File diff previews generated for the applied changes.
     /// </summary>
     public List<FileDiffPreview> Previews { get; set; } = new();
