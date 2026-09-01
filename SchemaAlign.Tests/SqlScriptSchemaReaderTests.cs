@@ -628,4 +628,130 @@ CREATE TABLE [MyServer].[MyDatabase].[sales].[OrderItems] (
         itemsTable.ForeignKeys.Should().HaveCount(1);
         itemsTable.ForeignKeys[0].PrincipalTable.Should().Be("Orders");
     }
+
+    [Fact]
+    public void ReadDirectory_EndToEndMaskedSqlScripts_GeneratesFullDatabaseSchemaEvidence()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"schema_align_sql_e2e_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var auditScript = @"
+/* Multi-line header comment describing audit schema */
+-- Creating audit log table
+CREATE TABLE [audit].[tbl_masked_audit_log] (
+    [AuditId] BIGINT IDENTITY(1, 1) NOT NULL,
+    [EntityName] [nvarchar](100) NOT NULL,
+    [Action] [varchar](50) NOT NULL,
+    [Payload] [varbinary](max) NULL,
+    [CreatedAt] [datetime2](7) NOT NULL DEFAULT GETUTCDATE(),
+    CONSTRAINT [PK_tbl_masked_audit_log] PRIMARY KEY ([AuditId] ASC)
+);
+GO
+
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Audit log tracking all entity state changes', @level0type=N'SCHEMA', @level0name=N'audit', @level1type=N'TABLE', @level1name=N'tbl_masked_audit_log';
+GO
+";
+
+            var schemaScript = @"
+-- Main business domain tables
+CREATE TABLE [sales].[tbl_masked_customer] (
+    [CustomerId] INT IDENTITY(1, 1) NOT NULL,
+    [CustomerCode] [nvarchar](50) NOT NULL,
+    [CompanyName] [nvarchar](150) NOT NULL,
+    [IsActive] [bit] NOT NULL DEFAULT (1),
+    [CreditLimit] [decimal](18, 2) NULL,
+    [CreatedAt] [datetime2](7) NOT NULL,
+    CONSTRAINT [PK_tbl_masked_customer] PRIMARY KEY CLUSTERED ([CustomerId] ASC)
+);
+
+CREATE TABLE [sales].[tbl_masked_order] (
+    [OrderId] INT IDENTITY(1, 1) NOT NULL,
+    [CustomerId] INT NOT NULL,
+    [OrderNumber] [nvarchar](100) NOT NULL,
+    [OrderDate] [date] NOT NULL,
+    [TotalAmount] [decimal](18, 4) NOT NULL DEFAULT (0),
+    [StatusCode] [varchar](30) NOT NULL,
+    CONSTRAINT [PK_tbl_masked_order] PRIMARY KEY ([OrderId])
+);
+
+CREATE TABLE [sales].[tbl_masked_order_item] (
+    [TenantId] INT NOT NULL,
+    [OrderId] INT NOT NULL,
+    [ItemSeq] INT NOT NULL,
+    [ItemSku] [nvarchar](50) NOT NULL,
+    [Quantity] INT NOT NULL DEFAULT (1),
+    [UnitPrice] [decimal](18, 4) NOT NULL,
+    CONSTRAINT [PK_tbl_masked_order_item] PRIMARY KEY ([TenantId] ASC, [OrderId] ASC, [ItemSeq] ASC)
+);
+
+-- Batch with multiple ALTER TABLE statements without GO
+ALTER TABLE [sales].[tbl_masked_order] WITH CHECK ADD CONSTRAINT [FK_tbl_masked_order_customer] FOREIGN KEY ([CustomerId]) REFERENCES [sales].[tbl_masked_customer] ([CustomerId]);
+ALTER TABLE [sales].[tbl_masked_order_item] WITH CHECK ADD CONSTRAINT [FK_tbl_masked_order_item_order] FOREIGN KEY ([OrderId]) REFERENCES [sales].[tbl_masked_order] ([OrderId]);
+ALTER TABLE [sales].[tbl_masked_customer] ADD [Notes] [nvarchar](MAX) NULL, [TierLevel] INT NOT NULL DEFAULT (1);
+
+-- Batch with multiple sp_addextendedproperty statements without GO
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Customer account records', @level0type=N'SCHEMA', @level0name=N'sales', @level1type=N'TABLE', @level1name=N'tbl_masked_customer';
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Unique business customer code', @level0type=N'SCHEMA', @level0name=N'sales', @level1type=N'TABLE', @level1name=N'tbl_masked_customer', @level2type=N'COLUMN', @level2name=N'CustomerCode';
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Customer sales orders', @level0type=N'SCHEMA', @level0name=N'sales', @level1type=N'TABLE', @level1name=N'tbl_masked_order';
+EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Line items within a customer order', @level0type=N'SCHEMA', @level0name=N'sales', @level1type=N'TABLE', @level1name=N'tbl_masked_order_item';
+";
+
+            File.WriteAllText(Path.Combine(tempDir, "01_audit.sql"), auditScript);
+            File.WriteAllText(Path.Combine(tempDir, "02_sales.sql"), schemaScript);
+
+            var reader = new SqlScriptSchemaReader();
+            var schema = reader.ReadDirectory(tempDir);
+
+            schema.Tables.Should().HaveCount(4);
+            schema.Tables.Should().ContainKey("tbl_masked_audit_log");
+            schema.Tables.Should().ContainKey("tbl_masked_customer");
+            schema.Tables.Should().ContainKey("tbl_masked_order");
+            schema.Tables.Should().ContainKey("tbl_masked_order_item");
+
+            // Verify customer
+            var custTable = schema.FindTable("tbl_masked_customer");
+            custTable.Should().NotBeNull();
+            custTable!.Schema.Should().Be("sales");
+            custTable.Comment.Should().Be("Customer account records");
+            custTable.FindColumn("CustomerId")!.IsPrimaryKey.Should().BeTrue();
+            custTable.FindColumn("CustomerId")!.IsIdentity.Should().BeTrue();
+            custTable.FindColumn("CustomerCode")!.Length.Should().Be(50);
+            custTable.FindColumn("CustomerCode")!.Comment.Should().Be("Unique business customer code");
+            custTable.FindColumn("Notes")!.Type.Should().Be(StandardType.String);
+            custTable.FindColumn("Notes")!.Length.Should().Be(-1);
+            custTable.FindColumn("TierLevel")!.Type.Should().Be(StandardType.Int);
+
+            // Verify order
+            var orderTable = schema.FindTable("tbl_masked_order");
+            orderTable.Should().NotBeNull();
+            orderTable!.ForeignKeys.Should().HaveCount(1);
+            orderTable.ForeignKeys[0].PrincipalTable.Should().Be("tbl_masked_customer");
+            orderTable.ForeignKeys[0].PrincipalColumn.Should().Be("CustomerId");
+
+            // Verify order item composite key & FK
+            var itemTable = schema.FindTable("tbl_masked_order_item");
+            itemTable.Should().NotBeNull();
+            itemTable!.PrimaryKeys.Should().BeEquivalentTo(new[] { "TenantId", "OrderId", "ItemSeq" });
+            itemTable.ForeignKeys.Should().HaveCount(1);
+            itemTable.ForeignKeys[0].PrincipalTable.Should().Be("tbl_masked_order");
+
+            // Write test evidence output if evidence directory exists
+            var evidenceDir = @"C:\Users\william.susanto\.no-mistakes\evidence\01M1DQTNTHQMQH7FGP1W72817E";
+            if (Directory.Exists(evidenceDir))
+            {
+                var jsonOptions = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+                var jsonContent = System.Text.Json.JsonSerializer.Serialize(schema, jsonOptions);
+                File.WriteAllText(Path.Combine(evidenceDir, "sql_script_reader_e2e_evidence.json"), jsonContent);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
 }

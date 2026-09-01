@@ -109,7 +109,7 @@ public class MermaidSchemaReaderTests
 
         var table = schema.Tables["Products"];
         table.Columns["Id"].Comment.Should().Be("Identifier");
-        
+
         table.Columns["Sku"].Length.Should().Be(50);
         table.Columns["Sku"].Comment.Should().BeNull();
 
@@ -299,7 +299,7 @@ public class MermaidSchemaReaderTests
 
         schema.Tables.Should().ContainKey("Students");
         schema.Tables.Should().ContainKey("Courses");
-        
+
         var coursesTable = schema.Tables["Courses"];
         coursesTable.ForeignKeys.Should().HaveCount(1);
         coursesTable.ForeignKeys[0].Cardinality.Should().Be(ForeignKeyCardinality.ManyToMany);
@@ -336,7 +336,7 @@ public class MermaidSchemaReaderTests
 
         schema.Tables.Should().ContainKey("CUSTOMER");
         schema.Tables.Should().ContainKey("ORDER");
-        
+
         var order = schema.Tables["ORDER"];
         order.ForeignKeys.Should().HaveCount(1);
         order.ForeignKeys[0].PrincipalTable.Should().Be("CUSTOMER");
