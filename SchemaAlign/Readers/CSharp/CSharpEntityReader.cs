@@ -7,6 +7,9 @@ using SchemaAlign.Models.TypeMapping;
 
 namespace SchemaAlign.Readers.CSharp;
 
+/// <summary>
+/// Reads database schemas from C# source code and Entity Framework Core entity classes.
+/// </summary>
 public class CSharpEntityReader : ISchemaReader
 {
     private static readonly Regex XmlDocSummaryRegex = new(@"<summary>\s*([\s\S]*?)\s*</summary>", RegexOptions.Compiled);
@@ -18,6 +21,11 @@ public class CSharpEntityReader : ISchemaReader
         "Collection", "ObservableCollection", "ReadOnlyCollection", "IReadOnlyCollection", "IReadOnlyList"
     };
 
+    /// <summary>
+    /// Reads and parses C# entity classes from source code content.
+    /// </summary>
+    /// <param name="content">C# source code string.</param>
+    /// <returns>A <see cref="DatabaseSchema"/> representing the parsed entity schema.</returns>
     public DatabaseSchema Read(string content)
     {
         if (string.IsNullOrWhiteSpace(content))
@@ -29,6 +37,11 @@ public class CSharpEntityReader : ISchemaReader
         return ReadSyntaxTrees(new[] { syntaxTree });
     }
 
+    /// <summary>
+    /// Reads and parses C# entity classes from a single file.
+    /// </summary>
+    /// <param name="filePath">Path to the C# source file.</param>
+    /// <returns>A <see cref="DatabaseSchema"/> representing the parsed entity schema.</returns>
     public DatabaseSchema ReadFile(string filePath)
     {
         if (!File.Exists(filePath))
@@ -41,6 +54,11 @@ public class CSharpEntityReader : ISchemaReader
         return ReadSyntaxTrees(new[] { syntaxTree });
     }
 
+    /// <summary>
+    /// Reads and parses C# entity classes from a collection of file paths.
+    /// </summary>
+    /// <param name="filePaths">Collection of C# source file paths.</param>
+    /// <returns>A <see cref="DatabaseSchema"/> representing the parsed entity schema.</returns>
     public DatabaseSchema ReadFiles(IEnumerable<string> filePaths)
     {
         var syntaxTrees = filePaths

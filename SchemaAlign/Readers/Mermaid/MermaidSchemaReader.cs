@@ -4,6 +4,11 @@ using SchemaAlign.Models.TypeMapping;
 
 namespace SchemaAlign.Readers.Mermaid;
 
+/// <summary>
+/// Reads database schemas from Mermaid ER diagrams (erDiagram syntax).
+/// Supports entity definitions, column attributes, data types, nullability (via '?' suffix or 'NULL'/'nullable' comments),
+/// dimensions (length, precision, scale), PK/FK markers, and relationship cardinality.
+/// </summary>
 public class MermaidSchemaReader : ISchemaReader
 {
     private static readonly Regex FrontmatterRegex = new(@"^---\s*$", RegexOptions.Compiled);
@@ -17,6 +22,11 @@ public class MermaidSchemaReader : ISchemaReader
         @"^([a-zA-Z0-9_\.\[\]]+)\s*([\|\}o][\|o\{])\s*(--|\.\.)\s*([\|o\{][\|\{o])\s*([a-zA-Z0-9_\.\[\]]+)(?:\s*:\s*(?:""([^""]*)""|'([^']*)'|(\S*)))?",
         RegexOptions.Compiled);
 
+    /// <summary>
+    /// Reads and parses a database schema from Mermaid ER diagram text content.
+    /// </summary>
+    /// <param name="content">The Mermaid ER diagram text content.</param>
+    /// <returns>A <see cref="DatabaseSchema"/> representing the parsed schema.</returns>
     public DatabaseSchema Read(string content)
     {
         var schema = new DatabaseSchema();
@@ -133,6 +143,11 @@ public class MermaidSchemaReader : ISchemaReader
         return schema;
     }
 
+    /// <summary>
+    /// Reads and parses a database schema from a Mermaid ER diagram file.
+    /// </summary>
+    /// <param name="filePath">Path to the Mermaid diagram file (.mmd, .mermaid).</param>
+    /// <returns>A <see cref="DatabaseSchema"/> representing the parsed schema.</returns>
     public DatabaseSchema ReadFile(string filePath)
     {
         ArgumentNullException.ThrowIfNull(filePath);
