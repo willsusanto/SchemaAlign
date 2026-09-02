@@ -210,26 +210,55 @@ public class MermaidSchemaReader : ISchemaReader
         }
 
         var trimmed = rawComment.Trim();
-        if (trimmed.Equals("nullable", StringComparison.OrdinalIgnoreCase))
+        if (trimmed.Equals("nullable", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("NULL", StringComparison.OrdinalIgnoreCase))
         {
             isNullable = true;
             comment = null;
             return;
         }
 
-        // Check for "precision,scale, comment" or "precision,scale" (e.g. "18,2" or "18,2, Unit price")
+        if (trimmed.StartsWith("nullable,", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("NULL,", StringComparison.OrdinalIgnoreCase))
+        {
+            isNullable = true;
+            trimmed = trimmed.Substring(trimmed.IndexOf(',') + 1).Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                comment = null;
+                return;
+            }
+        }
+
+        // Check for "precision,scale, comment" or "precision,scale" (e.g. "18,2" or "18,2, NULL" or "18,2, Unit price")
         var precScaleMatch = PrecScaleCommentRegex.Match(trimmed);
         if (precScaleMatch.Success)
         {
             if (!precision.HasValue) precision = int.Parse(precScaleMatch.Groups[1].Value);
             if (!scale.HasValue) scale = int.Parse(precScaleMatch.Groups[2].Value);
-            comment = precScaleMatch.Groups[3].Success && !string.IsNullOrWhiteSpace(precScaleMatch.Groups[3].Value)
+            var rest = precScaleMatch.Groups[3].Success && !string.IsNullOrWhiteSpace(precScaleMatch.Groups[3].Value)
                 ? precScaleMatch.Groups[3].Value.Trim()
                 : null;
+
+            if (rest != null)
+            {
+                if (rest.Equals("nullable", StringComparison.OrdinalIgnoreCase) || rest.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                {
+                    isNullable = true;
+                    comment = null;
+                    return;
+                }
+
+                if (rest.StartsWith("nullable,", StringComparison.OrdinalIgnoreCase) || rest.StartsWith("NULL,", StringComparison.OrdinalIgnoreCase))
+                {
+                    isNullable = true;
+                    rest = rest.Substring(rest.IndexOf(',') + 1).Trim();
+                }
+            }
+
+            comment = string.IsNullOrWhiteSpace(rest) ? null : rest;
             return;
         }
 
-        // Check for "length, comment" or "length" (e.g. "50", "100, Title", "max, Description")
+        // Check for "length, comment" or "length" (e.g. "50", "50, NULL", "100, Title", "max, Description")
         var lenMatch = LengthCommentRegex.Match(trimmed);
         if (lenMatch.Success)
         {
@@ -238,11 +267,31 @@ public class MermaidSchemaReader : ISchemaReader
                 var lenStr = lenMatch.Groups[1].Value;
                 length = lenStr.Equals("max", StringComparison.OrdinalIgnoreCase) ? -1 : int.Parse(lenStr);
             }
-            comment = lenMatch.Groups[2].Success && !string.IsNullOrWhiteSpace(lenMatch.Groups[2].Value)
+            var rest = lenMatch.Groups[2].Success && !string.IsNullOrWhiteSpace(lenMatch.Groups[2].Value)
                 ? lenMatch.Groups[2].Value.Trim()
                 : null;
+
+            if (rest != null)
+            {
+                if (rest.Equals("nullable", StringComparison.OrdinalIgnoreCase) || rest.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                {
+                    isNullable = true;
+                    comment = null;
+                    return;
+                }
+
+                if (rest.StartsWith("nullable,", StringComparison.OrdinalIgnoreCase) || rest.StartsWith("NULL,", StringComparison.OrdinalIgnoreCase))
+                {
+                    isNullable = true;
+                    rest = rest.Substring(rest.IndexOf(',') + 1).Trim();
+                }
+            }
+
+            comment = string.IsNullOrWhiteSpace(rest) ? null : rest;
             return;
         }
+
+        comment = string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
     private static void ParseRelationshipLine(Match relMatch, DatabaseSchema schema)
