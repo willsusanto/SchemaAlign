@@ -43,21 +43,4 @@ public class ApplierRegistry
 
         throw new NotSupportedException($"No schema applier is registered or available for target type '{targetType}'.");
     }
-
-    private void TryRegister(string typeName, TargetType targetType)
-    {
-        try
-        {
-            var type = Type.GetType(typeName);
-            if (type != null && typeof(ISchemaApplier).IsAssignableFrom(type))
-            {
-                var instance = (ISchemaApplier)Activator.CreateInstance(type)!;
-                _appliers[targetType] = instance;
-            }
-        }
-        catch
-        {
-            // Ignore reflection activation errors if dependencies not yet merged
-        }
-    }
 }

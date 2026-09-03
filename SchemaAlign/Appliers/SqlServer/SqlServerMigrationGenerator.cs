@@ -233,12 +233,24 @@ public static class SqlServerMigrationGenerator
                 var column = colDiff.Target ?? colDiff.Source;
                 if (column == null) continue;
 
-                var sqlType = TypeMapper.ToSqlServerType(column);
-                var nullability = column.IsPrimaryKey ? "NOT NULL" : (column.IsNullable ? "NULL" : "NOT NULL");
+                var requiresAlterColumn = colDiff.Changes == ChangeDetail.None
+                    ? (colDiff.Source != null && colDiff.Target != null &&
+                       (colDiff.Source.Type != colDiff.Target.Type ||
+                        colDiff.Source.Length != colDiff.Target.Length ||
+                        colDiff.Source.Precision != colDiff.Target.Precision ||
+                        colDiff.Source.Scale != colDiff.Target.Scale ||
+                        colDiff.Source.IsNullable != colDiff.Target.IsNullable))
+                    : (colDiff.Changes & (ChangeDetail.TypeChanged | ChangeDetail.LengthChanged | ChangeDetail.PrecisionChanged | ChangeDetail.ScaleChanged | ChangeDetail.NullabilityChanged)) != 0;
 
-                sb.AppendLine($"ALTER TABLE [{schema}].[{tableDiff.TableName}] ALTER COLUMN [{column.Name}] {sqlType} {nullability};");
-                sb.AppendLine("GO");
-                sb.AppendLine();
+                if (requiresAlterColumn)
+                {
+                    var sqlType = TypeMapper.ToSqlServerType(column);
+                    var nullability = column.IsPrimaryKey ? "NOT NULL" : (column.IsNullable ? "NULL" : "NOT NULL");
+
+                    sb.AppendLine($"ALTER TABLE [{schema}].[{tableDiff.TableName}] ALTER COLUMN [{column.Name}] {sqlType} {nullability};");
+                    sb.AppendLine("GO");
+                    sb.AppendLine();
+                }
 
                 if (!string.IsNullOrWhiteSpace(column.Comment))
                 {
@@ -319,10 +331,27 @@ public static class SqlServerMigrationGenerator
     private static string GetPrincipalSchema(string principalTable, SchemaDiff diff, SqlServerApplierOptions options)
     {
         var foundTable = diff.FindTable(principalTable);
-        if (foundTable != null && !string.IsNullOrWhiteSpace(foundTable.Schema))
+        if (foundTable != null)
         {
-            return foundTable.Schema;
+            var schema = foundTable.Target?.Schema ?? foundTable.Source?.Schema ?? foundTable.Schema;
+            if (!string.IsNullOrWhiteSpace(schema))
+            {
+                return schema;
+            }
         }
+
+        var targetTable = diff.TargetSchema?.FindTable(principalTable);
+        if (targetTable != null && !string.IsNullOrWhiteSpace(targetTable.Schema))
+        {
+            return targetTable.Schema;
+        }
+
+        var sourceTable = diff.SourceSchema?.FindTable(principalTable);
+        if (sourceTable != null && !string.IsNullOrWhiteSpace(sourceTable.Schema))
+        {
+            return sourceTable.Schema;
+        }
+
         return options.DefaultSchema;
     }
 
