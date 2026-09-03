@@ -315,4 +315,64 @@ public class ExcelDataDictionaryExporterTests : IDisposable
         ws.Column(2).Width.Should().BeApproximately(41.5, 0.5);
         ws.Column(4).Width.Should().BeApproximately(33.5, 0.5);
     }
+
+    [Fact]
+    public void Export_PopulatesDefaultAuditNotesAndSampleData()
+    {
+        var mermaidContent = """
+            erDiagram
+                MockAuditedEntity {
+                    nvarchar(36) IdMock PK
+                    bit Stsrc
+                    nvarchar(36) UserIn
+                    datetime DateIn
+                    nvarchar(36) UserUp "NULL"
+                    datetime DateUp "NULL"
+                }
+            """;
+
+        var reader = new MermaidSchemaReader();
+        var schema = reader.Read(mermaidContent);
+
+        var options = new DictionaryExportOptions
+        {
+            DatabaseName = "AUDIT_DB",
+            OutputPath = Path.Combine(_tempOutputDir, "output_audit.xlsx")
+        };
+
+        var exporter = new ExcelDataDictionaryExporter();
+        exporter.Export(schema, options);
+
+        using var workbook = new XLWorkbook(options.OutputPath);
+        var ws = workbook.Worksheet("AUDIT_DB");
+
+        // Row 3: IdMock -> Notes and Sample Data empty
+        ws.Cell("N3").GetString().Should().Be(string.Empty);
+        ws.Cell("O3").GetString().Should().Be(string.Empty);
+
+        // Row 4: Stsrc
+        ws.Cell("E4").GetString().Should().Be("Stsrc");
+        ws.Cell("N4").GetString().Should().Be("Status record data");
+        ws.Cell("O4").GetString().Should().Be("0.1");
+
+        // Row 5: UserIn
+        ws.Cell("E5").GetString().Should().Be("UserIn");
+        ws.Cell("N5").GetString().Should().Be("User yang melakukan input data");
+        ws.Cell("O5").GetString().Should().Be("GUID");
+
+        // Row 6: DateIn
+        ws.Cell("E6").GetString().Should().Be("DateIn");
+        ws.Cell("N6").GetString().Should().Be("Tanggal data di input");
+        ws.Cell("O6").GetString().Should().Be("2026-01-22 09:25:18.8933333");
+
+        // Row 7: UserUp
+        ws.Cell("E7").GetString().Should().Be("UserUp");
+        ws.Cell("N7").GetString().Should().Be("User yang melakukan update data");
+        ws.Cell("O7").GetString().Should().Be("GUID");
+
+        // Row 8: DateUp
+        ws.Cell("E8").GetString().Should().Be("DateUp");
+        ws.Cell("N8").GetString().Should().Be("Tanggal data di update");
+        ws.Cell("O8").GetString().Should().Be("2026-01-22 09:25:18.8933333");
+    }
 }

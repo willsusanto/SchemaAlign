@@ -168,8 +168,9 @@ public class ExcelDataDictionaryExporter
                     ws.Cell(row, 13).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                 }
 
-                ws.Cell(row, 14).Value = column.Comment ?? string.Empty;
-                ws.Cell(row, 15).Value = string.Empty;
+                var (notes, sampleData) = ResolveNotesAndSampleData(column);
+                ws.Cell(row, 14).Value = notes;
+                ws.Cell(row, 15).Value = sampleData;
 
                 row++;
             }
@@ -323,5 +324,24 @@ public class ExcelDataDictionaryExporter
         var invalidChars = new[] { ':', '\\', '/', '?', '*', '[', ']' };
         var sanitized = new string(name.Where(c => !invalidChars.Contains(c)).ToArray());
         return sanitized.Length > 31 ? sanitized.Substring(0, 31) : sanitized;
+    }
+
+    private static (string Notes, string SampleData) ResolveNotesAndSampleData(ColumnSchema column)
+    {
+        switch (column.Name.Trim().ToLowerInvariant())
+        {
+            case "stsrc":
+                return ("Status record data", "0.1");
+            case "userin":
+                return ("User yang melakukan input data", "GUID");
+            case "datein":
+                return ("Tanggal data di input", "2026-01-22 09:25:18.8933333");
+            case "userup":
+                return ("User yang melakukan update data", "GUID");
+            case "dateup":
+                return ("Tanggal data di update", "2026-01-22 09:25:18.8933333");
+            default:
+                return (column.Comment ?? string.Empty, string.Empty);
+        }
     }
 }
