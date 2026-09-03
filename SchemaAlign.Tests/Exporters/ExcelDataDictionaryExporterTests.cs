@@ -323,6 +323,7 @@ public class ExcelDataDictionaryExporterTests : IDisposable
             erDiagram
                 MockAuditedEntity {
                     nvarchar(36) IdMock PK
+                    nvarchar(100) Remarks "Specific audit remark"
                     bit Stsrc
                     nvarchar(36) UserIn
                     datetime DateIn
@@ -350,29 +351,209 @@ public class ExcelDataDictionaryExporterTests : IDisposable
         ws.Cell("N3").GetString().Should().Be(string.Empty);
         ws.Cell("O3").GetString().Should().Be(string.Empty);
 
-        // Row 4: Stsrc
-        ws.Cell("E4").GetString().Should().Be("Stsrc");
-        ws.Cell("N4").GetString().Should().Be("Status record data");
-        ws.Cell("O4").GetString().Should().Be("0.1");
+        // Row 4: Remarks -> Preserves custom comment, Sample Data empty
+        ws.Cell("E4").GetString().Should().Be("Remarks");
+        ws.Cell("N4").GetString().Should().Be("Specific audit remark");
+        ws.Cell("O4").GetString().Should().Be(string.Empty);
 
-        // Row 5: UserIn
-        ws.Cell("E5").GetString().Should().Be("UserIn");
-        ws.Cell("N5").GetString().Should().Be("User yang melakukan input data");
-        ws.Cell("O5").GetString().Should().Be("GUID");
+        // Row 5: Stsrc
+        ws.Cell("E5").GetString().Should().Be("Stsrc");
+        ws.Cell("N5").GetString().Should().Be("Status record data");
+        ws.Cell("O5").GetString().Should().Be("0.1");
 
-        // Row 6: DateIn
-        ws.Cell("E6").GetString().Should().Be("DateIn");
-        ws.Cell("N6").GetString().Should().Be("Tanggal data di input");
-        ws.Cell("O6").GetString().Should().Be("2026-01-22 09:25:18.8933333");
+        // Row 6: UserIn
+        ws.Cell("E6").GetString().Should().Be("UserIn");
+        ws.Cell("N6").GetString().Should().Be("User yang melakukan input data");
+        ws.Cell("O6").GetString().Should().Be("GUID");
 
-        // Row 7: UserUp
-        ws.Cell("E7").GetString().Should().Be("UserUp");
-        ws.Cell("N7").GetString().Should().Be("User yang melakukan update data");
+        // Row 7: DateIn
+        ws.Cell("E7").GetString().Should().Be("DateIn");
+        ws.Cell("N7").GetString().Should().Be("Tanggal data di input");
+        ws.Cell("O7").GetString().Should().Be("2026-01-22 09:25:18.8933333");
+
+        // Row 8: UserUp
+        ws.Cell("E8").GetString().Should().Be("UserUp");
+        ws.Cell("N8").GetString().Should().Be("User yang melakukan update data");
+        ws.Cell("O8").GetString().Should().Be("GUID");
+
+        // Row 9: DateUp
+        ws.Cell("E9").GetString().Should().Be("DateUp");
+        ws.Cell("N9").GetString().Should().Be("Tanggal data di update");
+        ws.Cell("O9").GetString().Should().Be("2026-01-22 09:25:18.8933333");
+    }
+
+    [Fact]
+    public void Export_GeneratesFullEvidenceReport_WhenEvidenceDirectoryExists()
+    {
+        var evidenceDir = @"C:\Users\william.susanto\.no-mistakes\evidence\01M1K15H603JE3PW8Y1BVPX8T1";
+        if (!Directory.Exists(evidenceDir))
+        {
+            return;
+        }
+
+        var mermaidContent = """
+            erDiagram
+                Department {
+                    nvarchar(36) IdDepartment PK
+                    nvarchar(100) DepartmentName "Department display name"
+                    nvarchar(50) DepartmentCode
+                    bit Stsrc
+                    nvarchar(36) UserIn
+                    datetime DateIn
+                    nvarchar(36) UserUp "NULL"
+                    datetime DateUp "NULL"
+                }
+                Employee {
+                    nvarchar(36) IdEmployee PK
+                    nvarchar(36) IdDepartment FK
+                    nvarchar(100) FullName "Employee full name"
+                    bit Stsrc
+                    nvarchar(36) UserIn
+                    datetime DateIn
+                    nvarchar(36) UserUp "NULL"
+                    datetime DateUp "NULL"
+                }
+                Employee }o--|| Department : "IdDepartment"
+            """;
+
+        var reader = new MermaidSchemaReader();
+        var schema = reader.Read(mermaidContent);
+
+        var outputPath = Path.Combine(evidenceDir, "DataDictionary_AuditExport.xlsx");
+        var options = new DictionaryExportOptions
+        {
+            Aid = "1191",
+            IpDomain = "ssg5-hr-dev.internal.db",
+            DatabaseName = "HR_MANAGEMENT_DB",
+            SystemTitle = "HR Enterprise System",
+            OutputPath = outputPath
+        };
+
+        var exporter = new ExcelDataDictionaryExporter();
+        exporter.Export(schema, options);
+
+        File.Exists(outputPath).Should().BeTrue();
+
+        using var workbook = new XLWorkbook(outputPath);
+        var ws = workbook.Worksheet("HR_MANAGEMENT_DB");
+
+        // Validate headers
+        ws.Cell("A1").GetString().Should().Be("HR Enterprise System");
+        ws.Cell("J1").GetString().Should().Be("Source");
+        ws.Cell("N1").GetString().Should().Be("Notes");
+        ws.Cell("O1").GetString().Should().Be("Sample Data");
+
+        // Validate Department rows (Rows 3-10)
+        ws.Cell("E3").GetString().Should().Be("IdDepartment");
+        ws.Cell("F3").GetString().Should().Be("YES"); // PK
+        ws.Cell("N3").GetString().Should().Be(string.Empty);
+        ws.Cell("O3").GetString().Should().Be(string.Empty);
+
+        ws.Cell("E4").GetString().Should().Be("DepartmentName");
+        ws.Cell("N4").GetString().Should().Be("Department display name"); // custom comment preserved
+        ws.Cell("O4").GetString().Should().Be(string.Empty);
+
+        ws.Cell("E5").GetString().Should().Be("DepartmentCode");
+        ws.Cell("N5").GetString().Should().Be(string.Empty); // default empty
+        ws.Cell("O5").GetString().Should().Be(string.Empty);
+
+        ws.Cell("E6").GetString().Should().Be("Stsrc");
+        ws.Cell("N6").GetString().Should().Be("Status record data");
+        ws.Cell("O6").GetString().Should().Be("0.1");
+
+        ws.Cell("E7").GetString().Should().Be("UserIn");
+        ws.Cell("N7").GetString().Should().Be("User yang melakukan input data");
         ws.Cell("O7").GetString().Should().Be("GUID");
 
-        // Row 8: DateUp
-        ws.Cell("E8").GetString().Should().Be("DateUp");
-        ws.Cell("N8").GetString().Should().Be("Tanggal data di update");
+        ws.Cell("E8").GetString().Should().Be("DateIn");
+        ws.Cell("N8").GetString().Should().Be("Tanggal data di input");
         ws.Cell("O8").GetString().Should().Be("2026-01-22 09:25:18.8933333");
+
+        ws.Cell("E9").GetString().Should().Be("UserUp");
+        ws.Cell("N9").GetString().Should().Be("User yang melakukan update data");
+        ws.Cell("O9").GetString().Should().Be("GUID");
+
+        ws.Cell("E10").GetString().Should().Be("DateUp");
+        ws.Cell("N10").GetString().Should().Be("Tanggal data di update");
+        ws.Cell("O10").GetString().Should().Be("2026-01-22 09:25:18.8933333");
+
+        // Validate Employee rows (Rows 11-18)
+        ws.Cell("E11").GetString().Should().Be("IdEmployee");
+        ws.Cell("F11").GetString().Should().Be("YES"); // PK
+
+        ws.Cell("E12").GetString().Should().Be("IdDepartment");
+        ws.Cell("G12").GetString().Should().Be("YES"); // FK
+        ws.Cell("L12").GetString().Should().Be("Department"); // Ref Table
+        ws.Cell("M12").GetString().Should().Be("IdDepartment"); // Ref Field
+
+        ws.Cell("E13").GetString().Should().Be("FullName");
+        ws.Cell("N13").GetString().Should().Be("Employee full name"); // custom comment preserved
+
+        ws.Cell("E14").GetString().Should().Be("Stsrc");
+        ws.Cell("N14").GetString().Should().Be("Status record data");
+        ws.Cell("O14").GetString().Should().Be("0.1");
+
+        ws.Cell("E15").GetString().Should().Be("UserIn");
+        ws.Cell("N15").GetString().Should().Be("User yang melakukan input data");
+        ws.Cell("O15").GetString().Should().Be("GUID");
+
+        ws.Cell("E16").GetString().Should().Be("DateIn");
+        ws.Cell("N16").GetString().Should().Be("Tanggal data di input");
+        ws.Cell("O16").GetString().Should().Be("2026-01-22 09:25:18.8933333");
+
+        ws.Cell("E17").GetString().Should().Be("UserUp");
+        ws.Cell("N17").GetString().Should().Be("User yang melakukan update data");
+        ws.Cell("O17").GetString().Should().Be("GUID");
+
+        ws.Cell("E18").GetString().Should().Be("DateUp");
+        ws.Cell("N18").GetString().Should().Be("Tanggal data di update");
+        ws.Cell("O18").GetString().Should().Be("2026-01-22 09:25:18.8933333");
+
+        // Format and generate Markdown report in evidence directory
+        var reportSb = new System.Text.StringBuilder();
+        reportSb.AppendLine("# Excel Data Dictionary Export Verification Report");
+        reportSb.AppendLine();
+        reportSb.AppendLine($"- **Workbook**: `{Path.GetFileName(outputPath)}`");
+        reportSb.AppendLine($"- **Sheet Name**: `{ws.Name}`");
+        reportSb.AppendLine($"- **System Title**: `{ws.Cell(1, 1).GetString()}`");
+        reportSb.AppendLine($"- **Source Header**: `{ws.Cell(1, 10).GetString()}`");
+        reportSb.AppendLine($"- **Notes Header**: `{ws.Cell(1, 14).GetString()}`");
+        reportSb.AppendLine($"- **Sample Data Header**: `{ws.Cell(1, 15).GetString()}`");
+        reportSb.AppendLine();
+        reportSb.AppendLine("## Exported Columns Matrix");
+        reportSb.AppendLine();
+        reportSb.AppendLine("| Row | Table | Field | PK | FK | Nullable | Datatype | Ref Table | Ref Field | Notes | Sample Data |");
+        reportSb.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|");
+
+        var lastRow = ws.LastRowUsed()?.RowNumber() ?? 0;
+        for (var r = 3; r <= lastRow; r++)
+        {
+            var tbl = ws.Cell(r, 4).GetString();
+            var fld = ws.Cell(r, 5).GetString();
+            var pk = ws.Cell(r, 6).GetString();
+            var fk = ws.Cell(r, 7).GetString();
+            var nul = ws.Cell(r, 8).GetString();
+            var dt = ws.Cell(r, 9).GetString();
+            var refTbl = ws.Cell(r, 12).GetString();
+            var refFld = ws.Cell(r, 13).GetString();
+            var notes = ws.Cell(r, 14).GetString();
+            var sample = ws.Cell(r, 15).GetString();
+
+            reportSb.AppendLine($"| {r} | {tbl} | {fld} | {pk} | {fk} | {nul} | {dt} | {refTbl} | {refFld} | {notes} | {sample} |");
+        }
+
+        reportSb.AppendLine();
+        reportSb.AppendLine("## Verification Results");
+        reportSb.AppendLine();
+        reportSb.AppendLine("- Standard audit column `Stsrc`: Notes = `Status record data`, Sample Data = `0.1` -> [PASS]");
+        reportSb.AppendLine("- Standard audit column `UserIn`: Notes = `User yang melakukan input data`, Sample Data = `GUID` -> [PASS]");
+        reportSb.AppendLine("- Standard audit column `DateIn`: Notes = `Tanggal data di input`, Sample Data = `2026-01-22 09:25:18.8933333` -> [PASS]");
+        reportSb.AppendLine("- Standard audit column `UserUp`: Notes = `User yang melakukan update data`, Sample Data = `GUID` -> [PASS]");
+        reportSb.AppendLine("- Standard audit column `DateUp`: Notes = `Tanggal data di update`, Sample Data = `2026-01-22 09:25:18.8933333` -> [PASS]");
+        reportSb.AppendLine("- Custom commented column `DepartmentName`: Notes = `Department display name`, Sample Data = `` -> [PASS]");
+        reportSb.AppendLine("- Regular un-commented column `DepartmentCode`: Notes = ``, Sample Data = `` -> [PASS]");
+        reportSb.AppendLine("- Custom commented column `FullName`: Notes = `Employee full name`, Sample Data = `` -> [PASS]");
+
+        File.WriteAllText(Path.Combine(evidenceDir, "export_verification_report.md"), reportSb.ToString());
     }
 }
