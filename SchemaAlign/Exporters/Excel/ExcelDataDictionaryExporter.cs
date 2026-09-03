@@ -37,10 +37,21 @@ public class ExcelDataDictionaryExporter
     private static void BuildHeaders(IXLWorksheet ws, DictionaryExportOptions options)
     {
         // Row 1 merged sections
-        ws.Range("A1:I1").Merge().Value = options.SystemTitle;
-        ws.Range("J1:M1").Merge().Value = "Source";
-        ws.Range("N1:N2").Merge().Value = "Notes";
-        ws.Range("O1:O2").Merge().Value = "Sample Data";
+        var titleRange = ws.Range("A1:I1").Merge();
+        titleRange.Value = options.SystemTitle;
+        titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+        var sourceRange = ws.Range("J1:M1").Merge();
+        sourceRange.Value = "Source";
+        sourceRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+        var notesRange = ws.Range("N1:N2").Merge();
+        notesRange.Value = "Notes";
+        notesRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+        var sampleRange = ws.Range("O1:O2").Merge();
+        sampleRange.Value = "Sample Data";
+        sampleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
 
         // Row 2 column headers
         ws.Cell(2, 1).Value = "AID";
@@ -56,6 +67,22 @@ public class ExcelDataDictionaryExporter
         ws.Cell(2, 11).Value = "SQL DB / Azure DB / Cosmos DB (References)";
         ws.Cell(2, 12).Value = "Table / Container (References)";
         ws.Cell(2, 13).Value = "Field / Attribute (References)";
+
+        // Header styles
+        ws.Row(1).Style.Font.Bold = true;
+        ws.Row(2).Style.Font.Bold = true;
+
+        ws.Range("A1:O2").Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
+        // Header borders
+        ws.Range("A1:I1").Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+        ws.Range("J1:M1").Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+        ws.Range("N1:N2").Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+        ws.Range("O1:O2").Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+
+        var r2 = ws.Range("A2:O2");
+        r2.Style.Border.BottomBorder = XLBorderStyleValues.Medium;
+        r2.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
     }
 
     private static void PopulateRows(IXLWorksheet ws, DatabaseSchema schema, DictionaryExportOptions options)
@@ -64,6 +91,8 @@ public class ExcelDataDictionaryExporter
 
         foreach (var table in schema.Tables.Values)
         {
+            var startRow = row;
+
             foreach (var column in table.Columns.Values)
             {
                 var isPk = column.IsPrimaryKey;
@@ -101,7 +130,22 @@ public class ExcelDataDictionaryExporter
 
                 row++;
             }
+
+            var endRow = row - 1;
+            if (endRow >= startRow)
+            {
+                // Table boundary styling: medium separator lines between tables, and medium outer table edges
+                var tableRange = ws.Range(startRow, 1, endRow, 15);
+                tableRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+                tableRange.FirstRow().Style.Border.TopBorder = XLBorderStyleValues.Medium;
+                tableRange.LastRow().Style.Border.BottomBorder = XLBorderStyleValues.Medium;
+                tableRange.FirstColumn().Style.Border.LeftBorder = XLBorderStyleValues.Medium;
+                tableRange.LastColumn().Style.Border.RightBorder = XLBorderStyleValues.Medium;
+            }
         }
+
+        // Auto-fit columns for clean readability
+        ws.Columns().AdjustToContents();
     }
 
     private static (bool IsFk, string? RefTable, string? RefColumn) ResolveForeignKey(

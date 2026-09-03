@@ -202,4 +202,56 @@ public class ExcelDataDictionaryExporterTests : IDisposable
         ws.Cell("L5").GetString().Should().Be("TblAlpha");
         ws.Cell("M5").GetString().Should().Be("IdAlpha");
     }
+
+    [Fact]
+    public void Export_AppliesSeparatingBordersBetweenTablesAndHeaderStyling()
+    {
+        // Masked Mermaid schema with 2 tables
+        var mermaidContent = """
+            erDiagram
+                TblAlpha {
+                    nvarchar(50) IdAlpha PK
+                    nvarchar(100) AlphaName
+                }
+                TblBeta {
+                    nvarchar(36) IdBeta PK
+                    nvarchar(50) BetaCode
+                }
+            """;
+
+        var reader = new MermaidSchemaReader();
+        var schema = reader.Read(mermaidContent);
+
+        var options = new DictionaryExportOptions
+        {
+            DatabaseName = "STYLE_DB",
+            OutputPath = Path.Combine(_tempOutputDir, "output_styles.xlsx")
+        };
+
+        var exporter = new ExcelDataDictionaryExporter();
+        exporter.Export(schema, options);
+
+        using var workbook = new XLWorkbook(options.OutputPath);
+        var ws = workbook.Worksheet("STYLE_DB");
+
+        // Headers have bold font
+        ws.Cell("A1").Style.Font.Bold.Should().BeTrue();
+        ws.Cell("A2").Style.Font.Bold.Should().BeTrue();
+        ws.Cell("D2").Style.Font.Bold.Should().BeTrue();
+
+        // Row 2 header has medium bottom border
+        ws.Cell("D2").Style.Border.BottomBorder.Should().Be(XLBorderStyleValues.Medium);
+
+        // Table 1 (TblAlpha): Rows 3 to 4
+        // Table 1 starts at Row 3 -> TopBorder is Medium
+        ws.Cell("D3").Style.Border.TopBorder.Should().Be(XLBorderStyleValues.Medium);
+        // Table 1 ends at Row 4 -> BottomBorder is Medium
+        ws.Cell("D4").Style.Border.BottomBorder.Should().Be(XLBorderStyleValues.Medium);
+
+        // Table 2 (TblBeta): Rows 5 to 6
+        // Table 2 starts at Row 5 -> TopBorder is Medium (separating line between tables)
+        ws.Cell("D5").Style.Border.TopBorder.Should().Be(XLBorderStyleValues.Medium);
+        // Table 2 ends at Row 6 -> BottomBorder is Medium
+        ws.Cell("D6").Style.Border.BottomBorder.Should().Be(XLBorderStyleValues.Medium);
+    }
 }
