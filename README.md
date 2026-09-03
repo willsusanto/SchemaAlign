@@ -53,6 +53,7 @@ dotnet run --project SchemaAlign -- sync --source ./src/Entities --target ./docs
 - `--no-drop`: Explicitly block destructive drops (default in automated mode).
 - `--dry-run`: Generate and preview unified diffs without modifying files on disk.
 - `-y`, `--yes`: Apply changes non-interactively without confirmation prompt.
+- `--namespace`: Target C# namespace for generated entities (defaults to auto-detection from source files or `Entities`). Aliases: `--ns`.
 
 #### `inspect`
 Inspect and display parsed tables, columns, and foreign keys from a schema source:

@@ -39,5 +39,26 @@ public class CSharpApplierOptions : ApplierOptions
     /// Whether to delete entity files corresponding to dropped/deleted tables. Defaults to false.
     /// </summary>
     public bool DeleteDroppedTables { get; set; } = false;
+
+    /// <summary>
+    /// Source directories containing existing entity files for cross-directory type resolution.
+    /// </summary>
+    public List<string> SourceDirectories { get; set; } = new();
+
+    /// <summary>
+    /// Known entity class names mapped to their declared namespaces.
+    /// </summary>
+    public Dictionary<string, string> EntityNamespaces { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Additional using namespace directives to add to generated entity files.
+    /// </summary>
+    public List<string> AdditionalUsings { get; set; } = new();
+
+    /// <summary>
+    /// Whether to automatically detect the namespace of existing entity files in the target directory. Defaults to true.
+    /// </summary>
+    public bool AutoDetectNamespace { get; set; } = true;
 }
+
 

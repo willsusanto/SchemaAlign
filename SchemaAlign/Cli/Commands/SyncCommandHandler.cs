@@ -1,4 +1,5 @@
 using SchemaAlign.Appliers;
+using SchemaAlign.Appliers.CSharp;
 using SchemaAlign.Cli.Rendering;
 using SchemaAlign.Cli.Services;
 using SchemaAlign.Diff;
@@ -51,6 +52,11 @@ public class SyncCommandOptions
     /// Optional override for the target schema type.
     /// </summary>
     public TargetType? TargetTypeOverride { get; set; }
+
+    /// <summary>
+    /// Target C# namespace for generated entities.
+    /// </summary>
+    public string? Namespace { get; set; }
 }
 
 /// <summary>
@@ -168,13 +174,31 @@ public class SyncCommandHandler
             return 1;
         }
 
-        var primaryTargetDir = options.Source.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0];
-        var applierOptions = new ApplierOptions
+        var sourcePaths = options.Source.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var primaryTargetDir = sourcePaths.Length > 0 ? sourcePaths[0] : options.Source;
+
+        ApplierOptions applierOptions;
+        if (targetType == TargetType.CSharp)
         {
-            TargetDirectory = primaryTargetDir,
-            AllowDrops = options.AllowDrop,
-            DryRun = options.DryRun
-        };
+            applierOptions = new CSharpApplierOptions
+            {
+                TargetDirectory = primaryTargetDir,
+                SourceDirectories = sourcePaths.ToList(),
+                DefaultNamespace = !string.IsNullOrWhiteSpace(options.Namespace) ? options.Namespace : "Entities",
+                AutoDetectNamespace = string.IsNullOrWhiteSpace(options.Namespace),
+                AllowDrops = options.AllowDrop,
+                DryRun = options.DryRun
+            };
+        }
+        else
+        {
+            applierOptions = new ApplierOptions
+            {
+                TargetDirectory = primaryTargetDir,
+                AllowDrops = options.AllowDrop,
+                DryRun = options.DryRun
+            };
+        }
 
         // Preview
         var previews = await applier.PreviewAsync(diff, applierOptions, cancellationToken);

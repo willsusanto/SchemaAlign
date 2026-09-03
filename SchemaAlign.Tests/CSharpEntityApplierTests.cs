@@ -1174,6 +1174,198 @@ public class CSharpEntityApplierTests
         }
     }
 
+    [Fact]
+    public void GenerateEntitySource_WithForeignKeyToEntityInDifferentNamespace_EmitsUsingDirective()
+    {
+        var table = new TableSchema
+        {
+            Name = "AlphaCampus",
+            Schema = "dbo"
+        };
+        table.AddColumn(new ColumnSchema
+        {
+            Name = "IdAlpha",
+            Type = StandardType.String,
+            Length = 36,
+            IsPrimaryKey = true
+        });
+        table.AddColumn(new ColumnSchema
+        {
+            Name = "IdBeta",
+            Type = StandardType.String,
+            Length = 36
+        });
+        table.AddColumn(new ColumnSchema
+        {
+            Name = "CampusName",
+            Type = StandardType.String,
+            Length = 100
+        });
+        table.AddForeignKey(new ForeignKeySchema
+        {
+            ConstraintName = "FK_AlphaCampus_BetaInstitute",
+            PrincipalTable = "BetaInstitute",
+            PrincipalColumn = "IdBeta",
+            DependentTable = "AlphaCampus",
+            DependentColumn = "IdBeta",
+            Cardinality = ForeignKeyCardinality.ManyToOne
+        });
+
+        var options = new CSharpApplierOptions
+        {
+            DefaultNamespace = "MockOrg.Module.Campus",
+            EntityNamespaces = new Dictionary<string, string>
+            {
+                ["BetaInstitute"] = "MockOrg.Core.Library"
+            }
+        };
+
+        var generatedCode = _applier.GenerateEntitySource(table, options);
+
+        generatedCode.Should().Contain("using MockOrg.Core.Library;");
+        generatedCode.Should().Contain("namespace MockOrg.Module.Campus;");
+        generatedCode.Should().Contain("public virtual BetaInstitute? Beta { get; set; }");
+    }
+
+    [Fact]
+    public async Task PreviewAsync_TargetDirectoryWithExistingEntities_AutoDetectsNamespace()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"SchemaAlign_Test_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var existingEntity = """
+                namespace MockOrg.Core.Entities;
+
+                public class BetaInstitute
+                {
+                    public string IdBeta { get; set; } = string.Empty;
+                }
+                """;
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "BetaInstitute.cs"), existingEntity);
+
+            var diff = new SchemaDiff();
+            var addedTable = new TableSchema { Name = "AlphaCampus" };
+            addedTable.AddColumn(new ColumnSchema { Name = "IdAlpha", Type = StandardType.String, Length = 36, IsPrimaryKey = true });
+            addedTable.AddColumn(new ColumnSchema { Name = "IdBeta", Type = StandardType.String, Length = 36 });
+            addedTable.AddForeignKey(new ForeignKeySchema
+            {
+                ConstraintName = "FK_Alpha_Beta",
+                PrincipalTable = "BetaInstitute",
+                PrincipalColumn = "IdBeta",
+                DependentTable = "AlphaCampus",
+                DependentColumn = "IdBeta"
+            });
+            diff.Tables.Add(new TableDiff
+            {
+                TableName = "AlphaCampus",
+                Kind = DiffKind.Added,
+                Target = addedTable
+            });
+
+            var options = new CSharpApplierOptions
+            {
+                TargetDirectory = tempDir,
+                AutoDetectNamespace = true
+            };
+
+            var previews = await _applier.PreviewAsync(diff, options);
+
+            previews.Should().HaveCount(1);
+            var preview = previews[0];
+            preview.NewContent.Should().NotBeNull();
+            // Should auto-detect MockOrg.Core.Entities from existing files in targetDir
+            preview.NewContent.Should().Contain("namespace MockOrg.Core.Entities;");
+            preview.NewContent.Should().Contain("public virtual BetaInstitute? Beta { get; set; }");
+            // Since BetaInstitute is in MockOrg.Core.Entities, it should not have redundant using
+            preview.NewContent.Should().NotContain("using MockOrg.Core.Entities;");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task PreviewAsync_MultiPathSourcesWithCrossDirectoryEntities_ResolvesNamespacesAcrossDirectoriesAndEmitsUsings()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"SchemaAlign_Test_{Guid.NewGuid():N}");
+        var dirA = Path.Combine(tempRoot, "GroupModule");
+        var dirB = Path.Combine(tempRoot, "NodeCore");
+        Directory.CreateDirectory(dirA);
+        Directory.CreateDirectory(dirB);
+
+        try
+        {
+            var entityA = """
+                namespace MockOrg.Module.Group;
+
+                public class AlphaGroup
+                {
+                    public string IdGroup { get; set; } = string.Empty;
+                }
+                """;
+            await File.WriteAllTextAsync(Path.Combine(dirA, "AlphaGroup.cs"), entityA);
+
+            var entityB = """
+                namespace MockOrg.Core.Nodes;
+
+                public class DeltaNode
+                {
+                    public string IdNode { get; set; } = string.Empty;
+                }
+                """;
+            await File.WriteAllTextAsync(Path.Combine(dirB, "DeltaNode.cs"), entityB);
+
+            var diff = new SchemaDiff();
+            var addedTable = new TableSchema { Name = "AlphaCampus" };
+            addedTable.AddColumn(new ColumnSchema { Name = "IdAlpha", Type = StandardType.String, Length = 36, IsPrimaryKey = true });
+            addedTable.AddColumn(new ColumnSchema { Name = "IdNode", Type = StandardType.String, Length = 36 });
+            addedTable.AddForeignKey(new ForeignKeySchema
+            {
+                ConstraintName = "FK_Alpha_Delta",
+                PrincipalTable = "DeltaNode",
+                PrincipalColumn = "IdNode",
+                DependentTable = "AlphaCampus",
+                DependentColumn = "IdNode"
+            });
+            diff.Tables.Add(new TableDiff
+            {
+                TableName = "AlphaCampus",
+                Kind = DiffKind.Added,
+                Target = addedTable
+            });
+
+            var options = new CSharpApplierOptions
+            {
+                TargetDirectory = dirA,
+                SourceDirectories = new List<string> { dirA, dirB },
+                AutoDetectNamespace = true
+            };
+
+            var previews = await _applier.PreviewAsync(diff, options);
+
+            previews.Should().HaveCount(1);
+            var preview = previews[0];
+            preview.NewContent.Should().NotBeNull();
+            preview.NewContent.Should().Contain("namespace MockOrg.Module.Group;");
+            // DeltaNode is in MockOrg.Core.Nodes, so using MockOrg.Core.Nodes; MUST be emitted!
+            preview.NewContent.Should().Contain("using MockOrg.Core.Nodes;");
+            preview.NewContent.Should().Contain("public virtual DeltaNode? Node { get; set; }");
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, true);
+            }
+        }
+    }
+
     private static string? GetEvidenceDirectory()
     {
         var targetDir = @"C:\Users\william.susanto\.no-mistakes\evidence\01M1DW87W3F6H07XSV7XVAPFBP";
