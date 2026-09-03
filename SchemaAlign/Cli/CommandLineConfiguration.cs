@@ -303,7 +303,11 @@ public static class CommandLineConfiguration
 
         rootCommand.SetAction(async parseResult =>
         {
-            var wizard = wizardHandler ?? new WizardCommandHandler();
+            var wizard = wizardHandler ?? new WizardCommandHandler(
+                diffHandler: diffHandler,
+                syncHandler: syncHandler,
+                inspectHandler: inspectHandler,
+                exportHandler: exportHandler);
             return await wizard.RunAsync();
         });
 
