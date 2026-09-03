@@ -29,15 +29,13 @@ public static class CommandLineConfiguration
         // --- diff command ---
         var diffCurrentOpt = new Option<string>("--current")
         {
-            Description = "Path to current/base schema (e.g. ./src/Entities or current database connection string)",
-            Required = true
+            Description = "Path to current/base schema (e.g. ./src/Entities or current database connection string)"
         };
         diffCurrentOpt.Aliases.Add("-c");
 
         var diffTargetOpt = new Option<string>("--target")
         {
-            Description = "Path to desired/target schema to align toward (e.g. schema.mmd or new spec)",
-            Required = true
+            Description = "Path to desired/target schema to align toward (e.g. schema.mmd or new spec)"
         };
         diffTargetOpt.Aliases.Add("-t");
 
@@ -61,13 +59,19 @@ public static class CommandLineConfiguration
             DefaultValueFactory = _ => false
         };
 
+        var diffConfigOpt = new Option<string?>("--config")
+        {
+            Description = "Path to .schemaalign.json configuration file"
+        };
+
         var diffCommand = new Command("diff", "Compare current schema against desired target schema non-destructively")
         {
             diffCurrentOpt,
             diffTargetOpt,
             diffModeOpt,
             diffOutputOpt,
-            diffDetailedOpt
+            diffDetailedOpt,
+            diffConfigOpt
         };
 
         diffCommand.SetAction(async parseResult =>
@@ -79,7 +83,8 @@ public static class CommandLineConfiguration
                 Target = parseResult.GetValue(diffTargetOpt) ?? string.Empty,
                 Mode = parseResult.GetValue(diffModeOpt) ?? "incremental",
                 Output = parseResult.GetValue(diffOutputOpt) ?? "console",
-                Detailed = parseResult.GetValue(diffDetailedOpt)
+                Detailed = parseResult.GetValue(diffDetailedOpt),
+                ConfigFile = parseResult.GetValue(diffConfigOpt)
             };
             return await handler.RunAsync(options);
         });
@@ -87,15 +92,13 @@ public static class CommandLineConfiguration
         // --- sync command ---
         var syncCurrentOpt = new Option<string>("--current")
         {
-            Description = "Path to current/base schema to be updated (e.g. ./src/Entities or SQL connection string)",
-            Required = true
+            Description = "Path to current/base schema to be updated (e.g. ./src/Entities or SQL connection string)"
         };
         syncCurrentOpt.Aliases.Add("-c");
 
         var syncTargetOpt = new Option<string>("--target")
         {
-            Description = "Path to desired/target schema to align toward (e.g. schema.mmd or new spec)",
-            Required = true
+            Description = "Path to desired/target schema to align toward (e.g. schema.mmd or new spec)"
         };
         syncTargetOpt.Aliases.Add("-t");
 
@@ -151,6 +154,27 @@ public static class CommandLineConfiguration
         };
         syncNamespaceOpt.Aliases.Add("--ns");
 
+        var syncConfigOpt = new Option<string?>("--config")
+        {
+            Description = "Path to .schemaalign.json configuration file"
+        };
+
+        var syncBaseClassOpt = new Option<string?>("--base-class")
+        {
+            Description = "Base class for newly generated C# entity classes (e.g. AuditEntity)"
+        };
+
+        var syncUsingOpt = new Option<string[]>("--using")
+        {
+            Description = "Additional using namespace directives to add to generated entity files (can be specified multiple times)"
+        };
+
+        var syncClassAttrOpt = new Option<string[]>("--class-attribute")
+        {
+            Description = "Custom class-level attributes to emit on generated entity classes (can be specified multiple times)"
+        };
+        syncClassAttrOpt.Aliases.Add("--class-attr");
+
         var syncCommand = new Command("sync", "Synchronize current schema to match desired target schema")
         {
             syncCurrentOpt,
@@ -162,7 +186,11 @@ public static class CommandLineConfiguration
             syncDryRunOpt,
             syncYesOpt,
             syncInteractiveOpt,
-            syncNamespaceOpt
+            syncNamespaceOpt,
+            syncConfigOpt,
+            syncBaseClassOpt,
+            syncUsingOpt,
+            syncClassAttrOpt
         };
 
         syncCommand.SetAction(async parseResult =>
@@ -174,6 +202,9 @@ public static class CommandLineConfiguration
                 allowDrop = false;
             }
 
+            var usings = (parseResult.GetValue(syncUsingOpt) ?? Array.Empty<string>()).ToList();
+            var classAttrs = (parseResult.GetValue(syncClassAttrOpt) ?? Array.Empty<string>()).ToList();
+
             var options = new SyncCommandOptions
             {
                 Current = parseResult.GetValue(syncCurrentOpt) ?? string.Empty,
@@ -184,7 +215,11 @@ public static class CommandLineConfiguration
                 DryRun = parseResult.GetValue(syncDryRunOpt),
                 Yes = parseResult.GetValue(syncYesOpt),
                 Interactive = parseResult.GetValue(syncInteractiveOpt) && !parseResult.GetValue(syncYesOpt),
-                Namespace = parseResult.GetValue(syncNamespaceOpt)
+                Namespace = parseResult.GetValue(syncNamespaceOpt),
+                ConfigFile = parseResult.GetValue(syncConfigOpt),
+                BaseClass = parseResult.GetValue(syncBaseClassOpt),
+                Usings = usings,
+                ClassAttributes = classAttrs
             };
             return await handler.RunAsync(options);
         });

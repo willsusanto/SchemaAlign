@@ -3,6 +3,7 @@ using SchemaAlign.Appliers.CSharp;
 using SchemaAlign.Appliers.SqlServer;
 using SchemaAlign.Cli.Rendering;
 using SchemaAlign.Cli.Services;
+using SchemaAlign.Configuration;
 using SchemaAlign.Diff;
 using SchemaAlign.Models;
 using Spectre.Console;
@@ -63,6 +64,31 @@ public class SyncCommandOptions
     /// Target C# namespace for generated entities.
     /// </summary>
     public string? Namespace { get; set; }
+
+    /// <summary>
+    /// Optional path to .schemaalign.json configuration file.
+    /// </summary>
+    public string? ConfigFile { get; set; }
+
+    /// <summary>
+    /// Base class for newly generated C# entity classes (e.g. AuditEntity).
+    /// </summary>
+    public string? BaseClass { get; set; }
+
+    /// <summary>
+    /// Additional using namespace directives to add to generated entity files.
+    /// </summary>
+    public List<string> Usings { get; set; } = new();
+
+    /// <summary>
+    /// Custom class-level attributes to emit on generated entity classes.
+    /// </summary>
+    public List<string> ClassAttributes { get; set; } = new();
+
+    /// <summary>
+    /// Set of column names that should not be generated because they are inherited from the base class.
+    /// </summary>
+    public HashSet<string> OmitInheritedColumns { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -70,11 +96,14 @@ public class SyncCommandOptions
 /// </summary>
 public class SyncCommandHandler
 {
-    private readonly ApplierRegistry _applierRegistry;
     private readonly SchemaDetectionService _detectionService;
+    private readonly ApplierRegistry _applierRegistry;
     private readonly IAnsiConsole _console;
 
-    public SyncCommandHandler(ApplierRegistry? applierRegistry = null, SchemaDetectionService? detectionService = null, IAnsiConsole? console = null)
+    public SyncCommandHandler(
+        ApplierRegistry? applierRegistry = null,
+        SchemaDetectionService? detectionService = null,
+        IAnsiConsole? console = null)
     {
         _applierRegistry = applierRegistry ?? new ApplierRegistry();
         _detectionService = detectionService ?? new SchemaDetectionService();
@@ -89,6 +118,48 @@ public class SyncCommandHandler
     /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public virtual async Task<int> RunAsync(SyncCommandOptions options, CancellationToken cancellationToken = default)
     {
+        // Load config if specified or find in current directory
+        var config = !string.IsNullOrWhiteSpace(options.ConfigFile)
+            ? await ConfigurationLoader.LoadAsync(options.ConfigFile, cancellationToken)
+            : await ConfigurationLoader.FindAndLoadAsync(cancellationToken: cancellationToken);
+
+        if (config != null)
+        {
+            if (string.IsNullOrWhiteSpace(options.Current) && !string.IsNullOrWhiteSpace(config.Current ?? config.Source))
+                options.Current = (config.Current ?? config.Source)!;
+            if (string.IsNullOrWhiteSpace(options.Target) && !string.IsNullOrWhiteSpace(config.Target))
+                options.Target = config.Target;
+            if (string.Equals(options.Mode, "incremental", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(config.Mode))
+                options.Mode = config.Mode;
+            if (!options.AllowDrop && config.AllowDrop.HasValue)
+                options.AllowDrop = config.AllowDrop.Value;
+            if (string.IsNullOrWhiteSpace(options.Namespace) && !string.IsNullOrWhiteSpace(config.CSharp?.Namespace))
+                options.Namespace = config.CSharp.Namespace;
+            if (string.IsNullOrWhiteSpace(options.BaseClass) && !string.IsNullOrWhiteSpace(config.CSharp?.BaseClass))
+                options.BaseClass = config.CSharp.BaseClass;
+            if (config.CSharp?.Usings?.Count > 0)
+            {
+                foreach (var u in config.CSharp.Usings)
+                {
+                    if (!options.Usings.Contains(u)) options.Usings.Add(u);
+                }
+            }
+            if (config.CSharp?.ClassAttributes?.Count > 0)
+            {
+                foreach (var a in config.CSharp.ClassAttributes)
+                {
+                    if (!options.ClassAttributes.Contains(a)) options.ClassAttributes.Add(a);
+                }
+            }
+            if (config.CSharp?.OmitInheritedColumns?.Count > 0)
+            {
+                foreach (var c in config.CSharp.OmitInheritedColumns)
+                {
+                    options.OmitInheritedColumns.Add(c);
+                }
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(options.Current))
         {
             _console.MarkupLine("[red]Error: Current schema path (-c|--current) is required.[/]");
@@ -186,15 +257,23 @@ public class SyncCommandHandler
         ApplierOptions applierOptions;
         if (targetType == TargetType.CSharp)
         {
-            applierOptions = new CSharpApplierOptions
+            var csOpts = new CSharpApplierOptions
             {
                 TargetDirectory = primaryTargetDir,
                 SourceDirectories = currentPaths.ToList(),
                 DefaultNamespace = !string.IsNullOrWhiteSpace(options.Namespace) ? options.Namespace : "Entities",
                 AutoDetectNamespace = string.IsNullOrWhiteSpace(options.Namespace),
+                BaseClass = options.BaseClass,
+                ClassAttributes = options.ClassAttributes.ToList(),
+                AdditionalUsings = options.Usings.ToList(),
                 AllowDrops = options.AllowDrop,
                 DryRun = options.DryRun
             };
+            foreach (var col in options.OmitInheritedColumns)
+            {
+                csOpts.OmitInheritedColumns.Add(col);
+            }
+            applierOptions = csOpts;
         }
         else if (targetType == TargetType.SqlServerDatabase || targetType == TargetType.SqlServerScript)
         {

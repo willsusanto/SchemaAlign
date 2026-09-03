@@ -1,5 +1,6 @@
 using SchemaAlign.Cli.Rendering;
 using SchemaAlign.Cli.Services;
+using SchemaAlign.Configuration;
 using SchemaAlign.Diff;
 using SchemaAlign.Models;
 using Spectre.Console;
@@ -35,6 +36,11 @@ public class DiffCommandOptions
     /// Whether to display a detailed property-level change tree.
     /// </summary>
     public bool Detailed { get; set; } = false;
+
+    /// <summary>
+    /// Optional path to .schemaalign.json configuration file.
+    /// </summary>
+    public string? ConfigFile { get; set; }
 }
 
 /// <summary>
@@ -59,6 +65,25 @@ public class DiffCommandHandler
     /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public virtual async Task<int> RunAsync(DiffCommandOptions options, CancellationToken cancellationToken = default)
     {
+        // Load config if specified or find in current directory
+        var config = !string.IsNullOrWhiteSpace(options.ConfigFile)
+            ? await ConfigurationLoader.LoadAsync(options.ConfigFile, cancellationToken)
+            : await ConfigurationLoader.FindAndLoadAsync(cancellationToken: cancellationToken);
+
+        if (config != null)
+        {
+            if (string.IsNullOrWhiteSpace(options.Current) && !string.IsNullOrWhiteSpace(config.Current ?? config.Source))
+                options.Current = (config.Current ?? config.Source)!;
+            if (string.IsNullOrWhiteSpace(options.Target) && !string.IsNullOrWhiteSpace(config.Target))
+                options.Target = config.Target;
+            if (string.Equals(options.Mode, "incremental", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(config.Mode))
+                options.Mode = config.Mode;
+            if (string.Equals(options.Output, "console", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(config.Output))
+                options.Output = config.Output;
+            if (!options.Detailed && config.Detailed.HasValue)
+                options.Detailed = config.Detailed.Value;
+        }
+
         if (string.IsNullOrWhiteSpace(options.Current))
         {
             _console.MarkupLine("[red]Error: Current schema path (-c|--current) is required.[/]");

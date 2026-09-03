@@ -1,4 +1,5 @@
 using SchemaAlign.Appliers;
+using SchemaAlign.Appliers.CSharp;
 using SchemaAlign.Cli.Commands;
 using SchemaAlign.Cli.Rendering;
 using SchemaAlign.Cli.Services;
@@ -16,10 +17,12 @@ public class SyncWorkflowTests
         public bool ApplyCalled { get; private set; }
         public bool PreviewCalled { get; private set; }
         public SchemaDiff? LastDiffApplied { get; private set; }
+        public ApplierOptions? LastOptionsUsed { get; private set; }
 
         public Task<IReadOnlyList<FileDiffPreview>> PreviewAsync(SchemaDiff diff, ApplierOptions options, CancellationToken cancellationToken = default)
         {
             PreviewCalled = true;
+            LastOptionsUsed = options;
             var previews = new List<FileDiffPreview>
             {
                 new()
@@ -232,5 +235,46 @@ public class SyncWorkflowTests
         exitCode.Should().Be(0);
         mockApplier.ApplyCalled.Should().BeTrue();
         console.Output.Should().Contain("Successfully exported SQL Server migration script");
+    }
+
+    [Fact]
+    public async Task ExecuteSync_WithCSharpConventions_PassesBaseClassAndAttributesToApplierOptions()
+    {
+        var console = new TestConsole();
+        var mockApplier = new MockApplier();
+        var registry = new ApplierRegistry();
+        registry.Register(TargetType.CSharp, mockApplier);
+
+        var sourceSchema = new DatabaseSchema();
+        var targetSchema = new DatabaseSchema();
+        var newTable = new TableSchema { Name = "MockAsset" };
+        newTable.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+        targetSchema.AddTable(newTable);
+
+        var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
+        var options = new SyncCommandOptions
+        {
+            Source = "Entities",
+            Target = "schema.mmd",
+            BaseClass = "MockTrackedBase",
+            DryRun = true,
+            Yes = true,
+            Interactive = false
+        };
+        options.ClassAttributes.Add("[DatabaseContext(\"MockStore\")]");
+        options.Usings.Add("MockOrg.Framework.Patterns");
+        options.OmitInheritedColumns.Add("AuditStamp");
+
+        var exitCode = await handler.ExecuteAsync(sourceSchema, targetSchema, options, TargetType.CSharp);
+
+        exitCode.Should().Be(0);
+        mockApplier.LastOptionsUsed.Should().NotBeNull();
+        mockApplier.LastOptionsUsed.Should().BeOfType<CSharpApplierOptions>();
+
+        var csOpts = (CSharpApplierOptions)mockApplier.LastOptionsUsed!;
+        csOpts.BaseClass.Should().Be("MockTrackedBase");
+        csOpts.ClassAttributes.Should().Contain("[DatabaseContext(\"MockStore\")]");
+        csOpts.AdditionalUsings.Should().Contain("MockOrg.Framework.Patterns");
+        csOpts.OmitInheritedColumns.Should().Contain("AuditStamp");
     }
 }

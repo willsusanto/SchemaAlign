@@ -1366,6 +1366,115 @@ public class CSharpEntityApplierTests
         }
     }
 
+    [Fact]
+    public void GenerateEntitySource_WithBaseClassAndClassAttributes_EmitsInheritanceAndSuppressesOmittedColumns()
+    {
+        var table = new TableSchema
+        {
+            Name = "AlphaAsset",
+            Schema = "dbo"
+        };
+        table.AddColumn(new ColumnSchema { Name = "IdAsset", Type = StandardType.String, Length = 36, IsPrimaryKey = true });
+        table.AddColumn(new ColumnSchema { Name = "AssetName", Type = StandardType.String, Length = 100 });
+        table.AddColumn(new ColumnSchema { Name = "AuditCreatedBy", Type = StandardType.String, Length = 36 });
+        table.AddColumn(new ColumnSchema { Name = "AuditCreatedAt", Type = StandardType.DateTime });
+        table.AddColumn(new ColumnSchema { Name = "AuditUpdatedBy", Type = StandardType.String, Length = 36, IsNullable = true });
+        table.AddColumn(new ColumnSchema { Name = "AuditUpdatedAt", Type = StandardType.DateTime, IsNullable = true });
+        table.AddColumn(new ColumnSchema { Name = "RecordStatus", Type = StandardType.Int });
+
+        var options = new CSharpApplierOptions
+        {
+            DefaultNamespace = "MockOrg.Assets.Entities",
+            BaseClass = "AlphaTrackedBase",
+            ClassAttributes = new List<string> { "[CustomResourceGroup(\"PrimaryCluster\")]" },
+            OmitInheritedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "AuditCreatedBy", "AuditCreatedAt", "AuditUpdatedBy", "AuditUpdatedAt", "RecordStatus"
+            },
+            AdditionalUsings = new List<string> { "MockOrg.Shared.Framework" }
+        };
+
+        var generatedCode = _applier.GenerateEntitySource(table, options);
+
+        generatedCode.Should().Contain("using MockOrg.Shared.Framework;");
+        generatedCode.Should().Contain("[CustomResourceGroup(\"PrimaryCluster\")]");
+        generatedCode.Should().Contain("public class AlphaAsset : AlphaTrackedBase");
+        generatedCode.Should().Contain("public string IdAsset { get; set; }");
+        generatedCode.Should().Contain("public string AssetName { get; set; }");
+        generatedCode.Should().NotContain("AuditCreatedBy");
+        generatedCode.Should().NotContain("AuditCreatedAt");
+        generatedCode.Should().NotContain("AuditUpdatedBy");
+        generatedCode.Should().NotContain("AuditUpdatedAt");
+        generatedCode.Should().NotContain("RecordStatus");
+    }
+
+    [Fact]
+    public async Task PreviewAsync_WithDiscoveredBaseClass_AutoDiscoversInheritedPropertiesAndSuppressesThem()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"SchemaAlign_Test_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var baseClassCode = """
+                namespace MockOrg.Shared.Framework;
+
+                public abstract class AlphaTrackedBase
+                {
+                    public string AuditCreatedBy { get; set; } = string.Empty;
+                    public DateTime AuditCreatedAt { get; set; }
+                    public string? AuditUpdatedBy { get; set; }
+                    public DateTime? AuditUpdatedAt { get; set; }
+                    public int RecordStatus { get; set; }
+                }
+                """;
+            await File.WriteAllTextAsync(Path.Combine(tempDir, "AlphaTrackedBase.cs"), baseClassCode);
+
+            var diff = new SchemaDiff();
+            var table = new TableSchema { Name = "AlphaAsset" };
+            table.AddColumn(new ColumnSchema { Name = "IdAsset", Type = StandardType.String, Length = 36, IsPrimaryKey = true });
+            table.AddColumn(new ColumnSchema { Name = "AssetName", Type = StandardType.String, Length = 100 });
+            table.AddColumn(new ColumnSchema { Name = "AuditCreatedBy", Type = StandardType.String, Length = 36 });
+            table.AddColumn(new ColumnSchema { Name = "AuditCreatedAt", Type = StandardType.DateTime });
+            table.AddColumn(new ColumnSchema { Name = "AuditUpdatedBy", Type = StandardType.String, Length = 36, IsNullable = true });
+            table.AddColumn(new ColumnSchema { Name = "AuditUpdatedAt", Type = StandardType.DateTime, IsNullable = true });
+            table.AddColumn(new ColumnSchema { Name = "RecordStatus", Type = StandardType.Int });
+
+            diff.Tables.Add(new TableDiff
+            {
+                TableName = "AlphaAsset",
+                Kind = DiffKind.Added,
+                Target = table
+            });
+
+            var options = new CSharpApplierOptions
+            {
+                TargetDirectory = tempDir,
+                BaseClass = "AlphaTrackedBase",
+                AutoDetectNamespace = true
+            };
+
+            var previews = await _applier.PreviewAsync(diff, options);
+
+            previews.Should().HaveCount(1);
+            var preview = previews[0];
+            preview.NewContent.Should().NotBeNull();
+            preview.NewContent.Should().Contain("public class AlphaAsset : AlphaTrackedBase");
+            preview.NewContent.Should().Contain("public string IdAsset { get; set; }");
+            preview.NewContent.Should().Contain("public string AssetName { get; set; }");
+            // Discovered properties should be omitted from class body
+            preview.NewContent.Should().NotContain("public string AuditCreatedBy { get; set; }");
+            preview.NewContent.Should().NotContain("public DateTime AuditCreatedAt { get; set; }");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
+
     private static string? GetEvidenceDirectory()
     {
         var targetDir = @"C:\Users\william.susanto\.no-mistakes\evidence\01M1DW87W3F6H07XSV7XVAPFBP";

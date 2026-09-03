@@ -238,6 +238,7 @@ public class CSharpEntityApplier : ISchemaApplier
             .ToList();
 
         var targetDirNamespaces = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var classHierarchy = new Dictionary<string, (List<string> Props, List<string> BaseTypes)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var file in allFiles)
         {
@@ -254,26 +255,53 @@ public class CSharpEntityApplier : ISchemaApplier
                     fileNs = nsDecl.Name.ToString();
                 }
 
-                if (!string.IsNullOrWhiteSpace(fileNs))
+                if (!string.IsNullOrWhiteSpace(fileNs) && existingFiles.Contains(file))
                 {
-                    if (existingFiles.Contains(file))
+                    targetDirNamespaces[fileNs] = targetDirNamespaces.GetValueOrDefault(fileNs, 0) + 1;
+                }
+
+                foreach (var cls in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+                {
+                    var clsName = cls.Identifier.Text;
+                    if (!string.IsNullOrWhiteSpace(fileNs) && !csOptions.EntityNamespaces.ContainsKey(clsName))
                     {
-                        targetDirNamespaces[fileNs] = targetDirNamespaces.GetValueOrDefault(fileNs, 0) + 1;
+                        csOptions.EntityNamespaces[clsName] = fileNs;
                     }
 
-                    foreach (var cls in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
-                    {
-                        var clsName = cls.Identifier.Text;
-                        if (!csOptions.EntityNamespaces.ContainsKey(clsName))
-                        {
-                            csOptions.EntityNamespaces[clsName] = fileNs;
-                        }
-                    }
+                    var props = cls.Members.OfType<PropertyDeclarationSyntax>().Select(p => p.Identifier.Text).ToList();
+                    var bases = cls.BaseList?.Types.Select(t => t.Type.ToString().Trim()).ToList() ?? new List<string>();
+                    classHierarchy[clsName] = (props, bases);
                 }
             }
             catch
             {
                 // Ignore read or parse issues for individual files
+            }
+        }
+
+        // If BaseClass is specified, automatically discover and omit all properties in its inheritance chain
+        if (!string.IsNullOrWhiteSpace(csOptions.BaseClass))
+        {
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var queue = new Queue<string>();
+            queue.Enqueue(csOptions.BaseClass.Trim());
+
+            while (queue.Count > 0)
+            {
+                var currentClass = queue.Dequeue();
+                if (!visited.Add(currentClass)) continue;
+
+                if (classHierarchy.TryGetValue(currentClass, out var info))
+                {
+                    foreach (var prop in info.Props)
+                    {
+                        csOptions.OmitInheritedColumns.Add(prop);
+                    }
+                    foreach (var parentBase in info.BaseTypes)
+                    {
+                        queue.Enqueue(parentBase);
+                    }
+                }
             }
         }
 

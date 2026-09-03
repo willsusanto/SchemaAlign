@@ -45,6 +45,19 @@ public static class CSharpEntityGenerator
             }
         }
 
+        // Add using for base class if resolved to another namespace
+        if (!string.IsNullOrWhiteSpace(options.BaseClass))
+        {
+            var baseClassName = options.BaseClass.Trim();
+            if (options.EntityNamespaces.TryGetValue(baseClassName, out var baseNs))
+            {
+                if (!string.IsNullOrWhiteSpace(baseNs) && !string.Equals(baseNs, ns, StringComparison.OrdinalIgnoreCase))
+                {
+                    usings.Add($"using {baseNs};");
+                }
+            }
+        }
+
         // Add any explicit additional usings
         foreach (var extra in options.AdditionalUsings)
         {
@@ -107,6 +120,15 @@ public static class CSharpEntityGenerator
             sb.AppendLine($"{indent}/// </summary>");
         }
 
+        // Custom class attributes (e.g. [DatabaseName("...")] or [CustomMarker])
+        foreach (var attr in options.ClassAttributes)
+        {
+            if (string.IsNullOrWhiteSpace(attr)) continue;
+            var trimmed = attr.Trim();
+            var formattedAttr = trimmed.StartsWith("[") && trimmed.EndsWith("]") ? trimmed : $"[{trimmed}]";
+            sb.AppendLine($"{indent}{formattedAttr}");
+        }
+
         // [Table] attribute
         if (options.UseDataAnnotations)
         {
@@ -120,7 +142,11 @@ public static class CSharpEntityGenerator
             }
         }
 
-        sb.AppendLine($"{indent}public class {className}");
+        var baseClassSuffix = !string.IsNullOrWhiteSpace(options.BaseClass)
+            ? $" : {options.BaseClass.Trim()}"
+            : string.Empty;
+
+        sb.AppendLine($"{indent}public class {className}{baseClassSuffix}");
         sb.AppendLine($"{indent}{{");
 
         var memberIndent = indent + "    ";
@@ -129,13 +155,19 @@ public static class CSharpEntityGenerator
         // Columns
         foreach (var col in table.Columns.Values)
         {
+            var propName = NamingHelper.ToPascalCase(col.Name);
+
+            // Skip columns that are inherited from the base class
+            if (options.OmitInheritedColumns.Contains(col.Name) || options.OmitInheritedColumns.Contains(propName))
+            {
+                continue;
+            }
+
             if (!first)
             {
                 sb.AppendLine();
             }
             first = false;
-
-            var propName = NamingHelper.ToPascalCase(col.Name);
             var typeStr = TypeMapper.ToCSharpType(col.Type, col.IsNullable);
 
             // Property comment

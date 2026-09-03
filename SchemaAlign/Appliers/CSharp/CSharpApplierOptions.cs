@@ -59,6 +59,21 @@ public class CSharpApplierOptions : ApplierOptions
     /// Whether to automatically detect the namespace of existing entity files in the target directory. Defaults to true.
     /// </summary>
     public bool AutoDetectNamespace { get; set; } = true;
+
+    /// <summary>
+    /// Base class for newly generated entity classes to inherit from (e.g. "AuditEntity").
+    /// </summary>
+    public string? BaseClass { get; set; }
+
+    /// <summary>
+    /// Custom class-level attributes to emit on generated entity classes (e.g. "[DatabaseName(\"LibraryDB\")]").
+    /// </summary>
+    public List<string> ClassAttributes { get; set; } = new();
+
+    /// <summary>
+    /// Set of column names that should not be generated because they are inherited from the base class.
+    /// </summary>
+    public HashSet<string> OmitInheritedColumns { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 
