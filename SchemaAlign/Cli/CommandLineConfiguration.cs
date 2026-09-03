@@ -146,6 +146,12 @@ public static class CommandLineConfiguration
         };
         syncInteractiveOpt.Aliases.Add("-i");
 
+        var syncNamespaceOpt = new Option<string?>("--namespace")
+        {
+            Description = "Target C# namespace for generated entities (defaults to auto-detection from source files or 'Entities')"
+        };
+        syncNamespaceOpt.Aliases.Add("--ns");
+
         var syncCommand = new Command("sync", "Synchronize current base schema to match desired target schema")
         {
             syncSourceOpt,
@@ -155,7 +161,8 @@ public static class CommandLineConfiguration
             syncNoDropOpt,
             syncDryRunOpt,
             syncYesOpt,
-            syncInteractiveOpt
+            syncInteractiveOpt,
+            syncNamespaceOpt
         };
 
         syncCommand.SetAction(async parseResult =>
@@ -175,7 +182,8 @@ public static class CommandLineConfiguration
                 AllowDrop = allowDrop,
                 DryRun = parseResult.GetValue(syncDryRunOpt),
                 Yes = parseResult.GetValue(syncYesOpt),
-                Interactive = parseResult.GetValue(syncInteractiveOpt) && !parseResult.GetValue(syncYesOpt)
+                Interactive = parseResult.GetValue(syncInteractiveOpt) && !parseResult.GetValue(syncYesOpt),
+                Namespace = parseResult.GetValue(syncNamespaceOpt)
             };
             return await handler.RunAsync(options);
         });

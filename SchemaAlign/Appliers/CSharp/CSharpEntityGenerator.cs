@@ -20,11 +20,57 @@ public static class CSharpEntityGenerator
         var className = NamingHelper.ToEntityClassName(table.Name);
 
         // Usings
-        sb.AppendLine("using System;");
+        var usings = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "using System;"
+        };
+
         if (options.UseDataAnnotations)
         {
-            sb.AppendLine("using System.ComponentModel.DataAnnotations;");
-            sb.AppendLine("using System.ComponentModel.DataAnnotations.Schema;");
+            usings.Add("using System.ComponentModel.DataAnnotations;");
+            usings.Add("using System.ComponentModel.DataAnnotations.Schema;");
+        }
+
+        // Add usings for foreign key principal types
+        foreach (var fk in table.ForeignKeys)
+        {
+            var principalClassName = NamingHelper.ToEntityClassName(fk.PrincipalTable);
+            if (options.EntityNamespaces.TryGetValue(principalClassName, out var principalNs) ||
+                options.EntityNamespaces.TryGetValue(fk.PrincipalTable, out principalNs))
+            {
+                if (!string.IsNullOrWhiteSpace(principalNs) && !string.Equals(principalNs, ns, StringComparison.OrdinalIgnoreCase))
+                {
+                    usings.Add($"using {principalNs};");
+                }
+            }
+        }
+
+        // Add any explicit additional usings
+        foreach (var extra in options.AdditionalUsings)
+        {
+            if (string.IsNullOrWhiteSpace(extra)) continue;
+            var clean = extra.Trim();
+            var usingStmt = clean.StartsWith("using ", StringComparison.Ordinal)
+                ? (clean.EndsWith(";", StringComparison.Ordinal) ? clean : $"{clean};")
+                : $"using {clean};";
+            var nsPart = clean.StartsWith("using ", StringComparison.Ordinal)
+                ? clean[6..].TrimEnd(';').Trim()
+                : clean.TrimEnd(';');
+            if (!string.Equals(nsPart, ns, StringComparison.OrdinalIgnoreCase))
+            {
+                usings.Add(usingStmt);
+            }
+        }
+
+        // Sort usings: System first, then System.*, then alphabetically
+        var sortedUsings = usings
+            .OrderBy(u => u == "using System;" ? 0 : (u.StartsWith("using System", StringComparison.Ordinal) ? 1 : 2))
+            .ThenBy(u => u, StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var u in sortedUsings)
+        {
+            sb.AppendLine(u);
         }
         sb.AppendLine();
 

@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using SchemaAlign.Appliers.Diff;
 using SchemaAlign.Diff;
 using SchemaAlign.Models;
@@ -40,19 +42,16 @@ public class CSharpEntityApplier : ISchemaApplier
     {
         var csOptions = options as CSharpApplierOptions ?? new CSharpApplierOptions
         {
-            TargetDirectory = options.TargetDirectory
+            TargetDirectory = options.TargetDirectory,
+            AllowDrops = options.AllowDrops,
+            DryRun = options.DryRun
         };
 
         var previews = new List<FileDiffPreview>();
         var targetDir = csOptions.TargetDirectory;
 
-        // Scan existing .cs files if directory exists
-        var existingFiles = Directory.Exists(targetDir)
-            ? Directory.GetFiles(targetDir, "*.cs", SearchOption.AllDirectories)
-                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") &&
-                            !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
-                .ToList()
-            : new List<string>();
+        // Scan existing .cs files and resolve namespaces across target and source directories
+        PrepareOptionsAndScan(csOptions, targetDir, out var existingFiles);
 
         // 1. Handle Added Tables
         foreach (var addedTableDiff in diff.AddedTables)
@@ -207,5 +206,83 @@ public class CSharpEntityApplier : ISchemaApplier
         }
 
         return null;
+    }
+
+    private static void PrepareOptionsAndScan(CSharpApplierOptions csOptions, string targetDir, out List<string> existingFiles)
+    {
+        existingFiles = Directory.Exists(targetDir)
+            ? Directory.GetFiles(targetDir, "*.cs", SearchOption.AllDirectories)
+                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") &&
+                            !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+                .ToList()
+            : new List<string>();
+
+        var allDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(targetDir) && Directory.Exists(targetDir))
+        {
+            allDirs.Add(targetDir);
+        }
+        foreach (var sDir in csOptions.SourceDirectories)
+        {
+            if (!string.IsNullOrWhiteSpace(sDir) && Directory.Exists(sDir))
+            {
+                allDirs.Add(sDir);
+            }
+        }
+
+        var allFiles = allDirs
+            .SelectMany(d => Directory.GetFiles(d, "*.cs", SearchOption.AllDirectories))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") &&
+                        !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var targetDirNamespaces = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var file in allFiles)
+        {
+            try
+            {
+                var content = File.ReadAllText(file);
+                var syntaxTree = CSharpSyntaxTree.ParseText(content);
+                var root = syntaxTree.GetCompilationUnitRoot();
+
+                string? fileNs = null;
+                var nsDecl = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
+                if (nsDecl != null)
+                {
+                    fileNs = nsDecl.Name.ToString();
+                }
+
+                if (!string.IsNullOrWhiteSpace(fileNs))
+                {
+                    if (existingFiles.Contains(file))
+                    {
+                        targetDirNamespaces[fileNs] = targetDirNamespaces.GetValueOrDefault(fileNs, 0) + 1;
+                    }
+
+                    foreach (var cls in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+                    {
+                        var clsName = cls.Identifier.Text;
+                        if (!csOptions.EntityNamespaces.ContainsKey(clsName))
+                        {
+                            csOptions.EntityNamespaces[clsName] = fileNs;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore read or parse issues for individual files
+            }
+        }
+
+        if (csOptions.AutoDetectNamespace &&
+            (string.IsNullOrWhiteSpace(csOptions.DefaultNamespace) || csOptions.DefaultNamespace == "Entities") &&
+            targetDirNamespaces.Count > 0)
+        {
+            var dominantNamespace = targetDirNamespaces.OrderByDescending(kvp => kvp.Value).First().Key;
+            csOptions.DefaultNamespace = dominantNamespace;
+        }
     }
 }

@@ -118,6 +118,25 @@ public class CommandLineParsingTests
     }
 
     [Fact]
+    public async Task SyncCommand_ParsesNamespaceFlag()
+    {
+        SyncCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestSyncHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(syncHandler: mockHandler);
+        var exitCode = await root.Parse("sync -s schema.mmd -t ./Entities --namespace MockOrg.Data.Entities").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Namespace.Should().Be("MockOrg.Data.Entities");
+    }
+
+    [Fact]
     public async Task InspectCommand_ParsesSourceAndOutput()
     {
         InspectCommandOptions? capturedOptions = null;
