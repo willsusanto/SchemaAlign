@@ -89,6 +89,16 @@ public class SyncCommandOptions
     /// Set of column names that should not be generated because they are inherited from the base class.
     /// </summary>
     public HashSet<string> OmitInheritedColumns { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether to use file-scoped namespace declarations (defaults to true).
+    /// </summary>
+    public bool? UseFileScopedNamespaces { get; set; }
+
+    /// <summary>
+    /// Whether to generate DataAnnotation attributes ([Key], [Column], [Table], etc.).
+    /// </summary>
+    public bool? UseDataAnnotations { get; set; }
 }
 
 /// <summary>
@@ -158,6 +168,10 @@ public class SyncCommandHandler
                     options.OmitInheritedColumns.Add(c);
                 }
             }
+            if (!options.UseFileScopedNamespaces.HasValue && config.CSharp?.UseFileScopedNamespaces.HasValue == true)
+                options.UseFileScopedNamespaces = config.CSharp.UseFileScopedNamespaces.Value;
+            if (!options.UseDataAnnotations.HasValue && config.CSharp?.UseDataAnnotations.HasValue == true)
+                options.UseDataAnnotations = config.CSharp.UseDataAnnotations.Value;
         }
 
         if (string.IsNullOrWhiteSpace(options.Current))
@@ -269,6 +283,14 @@ public class SyncCommandHandler
                 AllowDrops = options.AllowDrop,
                 DryRun = options.DryRun
             };
+            if (options.UseFileScopedNamespaces.HasValue)
+            {
+                csOpts.UseFileScopedNamespaces = options.UseFileScopedNamespaces.Value;
+            }
+            if (options.UseDataAnnotations.HasValue)
+            {
+                csOpts.UseDataAnnotations = options.UseDataAnnotations.Value;
+            }
             foreach (var col in options.OmitInheritedColumns)
             {
                 csOpts.OmitInheritedColumns.Add(col);

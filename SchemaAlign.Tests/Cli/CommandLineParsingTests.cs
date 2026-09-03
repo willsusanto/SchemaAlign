@@ -197,6 +197,48 @@ public class CommandLineParsingTests
     }
 
     [Fact]
+    public async Task DiffCommand_AllowsOmissionOfSourceAndTarget_WhenUsingConfig()
+    {
+        DiffCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestDiffHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(diffHandler: mockHandler);
+        var exitCode = await root.Parse("diff --config myconfig.json").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Current.Should().BeEmpty();
+        capturedOptions.Target.Should().BeEmpty();
+        capturedOptions.ConfigFile.Should().Be("myconfig.json");
+    }
+
+    [Fact]
+    public async Task SyncCommand_AllowsOmissionOfSourceAndTarget_WhenUsingConfig()
+    {
+        SyncCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestSyncHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(syncHandler: mockHandler);
+        var exitCode = await root.Parse("sync --config myconfig.json").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Current.Should().BeEmpty();
+        capturedOptions.Target.Should().BeEmpty();
+        capturedOptions.ConfigFile.Should().Be("myconfig.json");
+    }
+
+    [Fact]
     public async Task InspectCommand_ParsesCurrentAndOutput()
     {
         InspectCommandOptions? capturedOptions = null;

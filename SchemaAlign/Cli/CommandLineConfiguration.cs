@@ -33,7 +33,7 @@ public static class CommandLineConfiguration
         };
         diffCurrentOpt.Aliases.Add("-c");
 
-        var diffTargetOpt = new Option<string>("--target")
+        var diffTargetOpt = new Option<string?>("--target")
         {
             Description = "Path to desired/target schema to align toward (e.g. schema.mmd or new spec)"
         };
@@ -96,7 +96,7 @@ public static class CommandLineConfiguration
         };
         syncCurrentOpt.Aliases.Add("-c");
 
-        var syncTargetOpt = new Option<string>("--target")
+        var syncTargetOpt = new Option<string?>("--target")
         {
             Description = "Path to desired/target schema to align toward (e.g. schema.mmd or new spec)"
         };

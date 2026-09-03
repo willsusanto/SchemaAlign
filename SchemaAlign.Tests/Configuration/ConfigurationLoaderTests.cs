@@ -18,6 +18,8 @@ public class ConfigurationLoaderTests
               "csharp": {
                 "namespace": "MockOrg.Domain.Entities",
                 "baseClass": "MockEntityBase",
+                "useFileScopedNamespaces": false,
+                "useDataAnnotations": true,
                 "usings": [
                   "MockOrg.Pattern.Core",
                   "MockOrg.Domain.Base"
@@ -48,6 +50,8 @@ public class ConfigurationLoaderTests
         config.CSharp.Should().NotBeNull();
         config.CSharp.Namespace.Should().Be("MockOrg.Domain.Entities");
         config.CSharp.BaseClass.Should().Be("MockEntityBase");
+        config.CSharp.UseFileScopedNamespaces.Should().Be(false);
+        config.CSharp.UseDataAnnotations.Should().Be(true);
         config.CSharp.Usings.Should().Contain("MockOrg.Pattern.Core");
         config.CSharp.Usings.Should().Contain("MockOrg.Domain.Base");
         config.CSharp.ClassAttributes.Should().Contain("[TableGroup(\"CoreStore\")]");
