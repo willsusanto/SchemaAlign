@@ -254,4 +254,65 @@ public class ExcelDataDictionaryExporterTests : IDisposable
         // Table 2 ends at Row 6 -> BottomBorder is Medium
         ws.Cell("D6").Style.Border.BottomBorder.Should().Be(XLBorderStyleValues.Medium);
     }
+
+    [Fact]
+    public void Export_AppliesExactTemplateStyling_FillsHeightsAndFonts()
+    {
+        var mermaidContent = """
+            erDiagram
+                MockEntity {
+                    nvarchar(36) IdMock PK
+                    nvarchar(50) Name
+                }
+            """;
+
+        var reader = new MermaidSchemaReader();
+        var schema = reader.Read(mermaidContent);
+
+        var options = new DictionaryExportOptions
+        {
+            DatabaseName = "EXACT_STYLE_DB",
+            OutputPath = Path.Combine(_tempOutputDir, "output_exact_styles.xlsx")
+        };
+
+        var exporter = new ExcelDataDictionaryExporter();
+        exporter.Export(schema, options);
+
+        using var workbook = new XLWorkbook(options.OutputPath);
+        var ws = workbook.Worksheet("EXACT_STYLE_DB");
+
+        // Font name and size
+        ws.Cell("A1").Style.Font.FontName.Should().Be("Calibri");
+        ws.Cell("A1").Style.Font.FontSize.Should().Be(10);
+        ws.Cell("A2").Style.Font.FontName.Should().Be("Calibri");
+        ws.Cell("A2").Style.Font.FontSize.Should().Be(10);
+        ws.Cell("D3").Style.Font.FontName.Should().Be("Calibri");
+        ws.Cell("D3").Style.Font.FontSize.Should().Be(10);
+
+        // Row heights and text wrapping
+        ws.Row(1).Height.Should().BeApproximately(14.4, 1.0);
+        ws.Row(2).Height.Should().Be(42);
+        ws.Cell("B2").Style.Alignment.WrapText.Should().BeTrue();
+
+        // Header fills (A1 is Gray, A2 is Yellow, B2 is Gray, F2 is Yellow)
+        var lightGray = XLColor.FromArgb(217, 217, 217);
+        var yellow = XLColor.FromArgb(255, 255, 0);
+
+        ws.Cell("A1").Style.Fill.BackgroundColor.Should().Be(lightGray);
+        ws.Cell("J1").Style.Fill.BackgroundColor.Should().Be(lightGray);
+        ws.Cell("N1").Style.Fill.BackgroundColor.Should().Be(lightGray);
+
+        ws.Cell("A2").Style.Fill.BackgroundColor.Should().Be(yellow);
+        ws.Cell("B2").Style.Fill.BackgroundColor.Should().Be(lightGray);
+        ws.Cell("D2").Style.Fill.BackgroundColor.Should().Be(lightGray);
+        ws.Cell("F2").Style.Fill.BackgroundColor.Should().Be(yellow);
+        ws.Cell("G2").Style.Fill.BackgroundColor.Should().Be(yellow);
+        ws.Cell("H2").Style.Fill.BackgroundColor.Should().Be(yellow);
+        ws.Cell("I2").Style.Fill.BackgroundColor.Should().Be(lightGray);
+
+        // Column widths
+        ws.Column(1).Width.Should().BeApproximately(12.5, 0.5);
+        ws.Column(2).Width.Should().BeApproximately(41.5, 0.5);
+        ws.Column(4).Width.Should().BeApproximately(33.5, 0.5);
+    }
 }

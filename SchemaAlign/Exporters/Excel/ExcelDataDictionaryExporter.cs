@@ -28,30 +28,46 @@ public class ExcelDataDictionaryExporter
         var sheetName = SanitizeSheetName(options.DatabaseName);
         var ws = workbook.Worksheets.Add(sheetName);
 
+        // Global font: Calibri, 10pt (matching kamus-cut.xlsx)
+        ws.Style.Font.FontName = "Calibri";
+        ws.Style.Font.FontSize = 10;
+
         BuildHeaders(ws, options);
         PopulateRows(ws, schema, options);
+        ApplyColumnWidths(ws);
 
         workbook.SaveAs(options.OutputPath);
     }
 
+    private static readonly XLColor LightGrayFill = XLColor.FromArgb(217, 217, 217);
+    private static readonly XLColor YellowFill = XLColor.FromArgb(255, 255, 0);
+
     private static void BuildHeaders(IXLWorksheet ws, DictionaryExportOptions options)
     {
+        // Row heights matching template
+        ws.Row(1).Height = 14.4;
+        ws.Row(2).Height = 42;
+
         // Row 1 merged sections
         var titleRange = ws.Range("A1:I1").Merge();
         titleRange.Value = options.SystemTitle;
         titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        titleRange.Style.Fill.BackgroundColor = LightGrayFill;
 
         var sourceRange = ws.Range("J1:M1").Merge();
         sourceRange.Value = "Source";
         sourceRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        sourceRange.Style.Fill.BackgroundColor = LightGrayFill;
 
         var notesRange = ws.Range("N1:N2").Merge();
         notesRange.Value = "Notes";
         notesRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        notesRange.Style.Fill.BackgroundColor = LightGrayFill;
 
         var sampleRange = ws.Range("O1:O2").Merge();
         sampleRange.Value = "Sample Data";
         sampleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        sampleRange.Style.Fill.BackgroundColor = LightGrayFill;
 
         // Row 2 column headers
         ws.Cell(2, 1).Value = "AID";
@@ -72,7 +88,17 @@ public class ExcelDataDictionaryExporter
         ws.Row(1).Style.Font.Bold = true;
         ws.Row(2).Style.Font.Bold = true;
 
-        ws.Range("A1:O2").Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        var headerRow2 = ws.Range("A2:O2");
+        headerRow2.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+        headerRow2.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        headerRow2.Style.Alignment.WrapText = true;
+
+        // Header fills (Light gray for general, yellow for key constraint columns)
+        headerRow2.Style.Fill.BackgroundColor = LightGrayFill;
+        ws.Cell(2, 1).Style.Fill.BackgroundColor = YellowFill; // AID
+        ws.Cell(2, 6).Style.Fill.BackgroundColor = YellowFill; // Is Primary Key
+        ws.Cell(2, 7).Style.Fill.BackgroundColor = YellowFill; // Is Foreign Key
+        ws.Cell(2, 8).Style.Fill.BackgroundColor = YellowFill; // Nullable
 
         // Header borders
         ws.Range("A1:I1").Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
@@ -80,9 +106,10 @@ public class ExcelDataDictionaryExporter
         ws.Range("N1:N2").Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
         ws.Range("O1:O2").Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
 
-        var r2 = ws.Range("A2:O2");
-        r2.Style.Border.BottomBorder = XLBorderStyleValues.Medium;
-        r2.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+        headerRow2.Style.Border.BottomBorder = XLBorderStyleValues.Medium;
+        headerRow2.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+        headerRow2.FirstColumn().Style.Border.LeftBorder = XLBorderStyleValues.Medium;
+        headerRow2.LastColumn().Style.Border.RightBorder = XLBorderStyleValues.Medium;
     }
 
     private static void PopulateRows(IXLWorksheet ws, DatabaseSchema schema, DictionaryExportOptions options)
@@ -100,6 +127,8 @@ public class ExcelDataDictionaryExporter
 
                 var formattedType = FormatDataType(column);
 
+                ws.Row(row).Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+
                 ws.Cell(row, 1).Value = options.Aid;
                 ws.Cell(row, 2).Value = options.IpDomain;
                 ws.Cell(row, 3).Value = options.DatabaseName;
@@ -109,6 +138,10 @@ public class ExcelDataDictionaryExporter
                 ws.Cell(row, 7).Value = isFk ? "YES" : "NO";
                 ws.Cell(row, 8).Value = column.IsNullable ? "YES" : "NO";
                 ws.Cell(row, 9).Value = formattedType;
+
+                ws.Cell(row, 6).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Cell(row, 7).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                ws.Cell(row, 8).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
 
                 if (isFk && !string.IsNullOrWhiteSpace(refTable) && !refTable.Equals("-", StringComparison.Ordinal))
                 {
@@ -123,6 +156,11 @@ public class ExcelDataDictionaryExporter
                     ws.Cell(row, 11).Value = "-";
                     ws.Cell(row, 12).Value = "-";
                     ws.Cell(row, 13).Value = "-";
+
+                    ws.Cell(row, 10).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    ws.Cell(row, 11).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    ws.Cell(row, 12).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    ws.Cell(row, 13).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                 }
 
                 ws.Cell(row, 14).Value = column.Comment ?? string.Empty;
@@ -143,9 +181,26 @@ public class ExcelDataDictionaryExporter
                 tableRange.LastColumn().Style.Border.RightBorder = XLBorderStyleValues.Medium;
             }
         }
+    }
 
-        // Auto-fit columns for clean readability
-        ws.Columns().AdjustToContents();
+    private static void ApplyColumnWidths(IXLWorksheet ws)
+    {
+        // Template column widths matching kamus-cut.xlsx
+        ws.Column(1).Width = 12.5;  // AID
+        ws.Column(2).Width = 41.5;  // IP
+        ws.Column(3).Width = 23.5;  // SQL DB
+        ws.Column(4).Width = 33.5;  // Table
+        ws.Column(5).Width = 32.0;  // Field
+        ws.Column(6).Width = 25.0;  // Is Primary Key
+        ws.Column(7).Width = 25.0;  // Is Foreign Key
+        ws.Column(8).Width = 25.0;  // Nullable
+        ws.Column(9).Width = 24.0;  // Datatype
+        ws.Column(10).Width = 41.5; // IP Ref
+        ws.Column(11).Width = 18.0; // SQL DB Ref
+        ws.Column(12).Width = 27.5; // Table Ref
+        ws.Column(13).Width = 26.0; // Field Ref
+        ws.Column(14).Width = 32.5; // Notes
+        ws.Column(15).Width = 37.0; // Sample Data
     }
 
     private static (bool IsFk, string? RefTable, string? RefColumn) ResolveForeignKey(
