@@ -1,5 +1,6 @@
 using SchemaAlign.Cli;
 using SchemaAlign.Cli.Commands;
+using Spectre.Console.Testing;
 using System.CommandLine;
 
 namespace SchemaAlign.Tests.Cli;
@@ -64,4 +65,59 @@ public class ExportCommandTests : IDisposable
         exitCode.Should().Be(0);
         File.Exists(outputFile).Should().BeTrue();
     }
+
+    [Fact]
+    public async Task ExportCommand_WithMermaidFileExtension_GeneratesXlsxSuccessfully()
+    {
+        var mermaidFile = Path.Combine(_tempDir, "model.mermaid");
+        File.WriteAllText(mermaidFile, """
+            erDiagram
+                MockEntity {
+                    nvarchar(36) IdMock PK
+                }
+            """);
+
+        var outputFile = Path.Combine(_tempDir, "out_from_mermaid.xlsx");
+
+        var rootCommand = CommandLineConfiguration.CreateRootCommand();
+        var exitCode = await rootCommand.Parse($"export -s \"{mermaidFile}\" -o \"{outputFile}\"").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        File.Exists(outputFile).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task WizardCommandHandler_Option4_InvokesExportHandlerSuccessfully()
+    {
+        var mermaidFile = Path.Combine(_tempDir, "wizard_model.mmd");
+        File.WriteAllText(mermaidFile, """
+            erDiagram
+                MockEntity {
+                    nvarchar(36) IdMock PK
+                    nvarchar(50) Name
+                }
+            """);
+
+        var outputFile = Path.Combine(_tempDir, "wizard_output.xlsx");
+
+        var testConsole = new TestConsole();
+        testConsole.Profile.Capabilities.Interactive = true;
+        // Option 4 is 3 DownArrows away from Option 1
+        testConsole.Input.PushKey(ConsoleKey.DownArrow);
+        testConsole.Input.PushKey(ConsoleKey.DownArrow);
+        testConsole.Input.PushKey(ConsoleKey.DownArrow);
+        testConsole.Input.PushKey(ConsoleKey.Enter);
+        testConsole.Input.PushTextWithEnter(mermaidFile);
+        testConsole.Input.PushTextWithEnter(outputFile);
+
+        var exportHandler = new ExportCommandHandler(testConsole);
+        var wizard = new WizardCommandHandler(exportHandler: exportHandler, console: testConsole);
+
+        var exitCode = await wizard.RunAsync();
+
+        exitCode.Should().Be(0);
+        File.Exists(outputFile).Should().BeTrue();
+        testConsole.Output.Should().Contain("Successfully exported Data Dictionary");
+    }
 }
+

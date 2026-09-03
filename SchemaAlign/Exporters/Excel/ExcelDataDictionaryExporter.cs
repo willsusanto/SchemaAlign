@@ -8,6 +8,11 @@ namespace SchemaAlign.Exporters.Excel;
 /// </summary>
 public class ExcelDataDictionaryExporter
 {
+    /// <summary>
+    /// Exports the specified database schema to an Excel Data Dictionary file.
+    /// </summary>
+    /// <param name="schema">The database schema model.</param>
+    /// <param name="options">Export and metadata options.</param>
     public void Export(DatabaseSchema schema, DictionaryExportOptions options)
     {
         ArgumentNullException.ThrowIfNull(schema);

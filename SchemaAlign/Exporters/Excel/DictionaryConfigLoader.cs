@@ -24,6 +24,9 @@ public static class DictionaryConfigLoader
         public string? SystemTitle { get; set; }
     }
 
+    /// <summary>
+    /// Loads and merges dictionary export options from a configuration file and CLI flags.
+    /// </summary>
     public static DictionaryExportOptions Load(
         string? configPath,
         string? cliAid,

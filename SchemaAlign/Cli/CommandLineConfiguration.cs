@@ -9,12 +9,13 @@ namespace SchemaAlign.Cli;
 public static class CommandLineConfiguration
 {
     /// <summary>
-    /// Creates and configures the root CLI command with diff, sync, inspect, and wizard commands.
+    /// Creates and configures the root CLI command with diff, sync, inspect, export, and wizard commands.
     /// </summary>
     /// <param name="diffHandler">Optional custom handler for the diff command.</param>
     /// <param name="syncHandler">Optional custom handler for the sync command.</param>
     /// <param name="inspectHandler">Optional custom handler for the inspect command.</param>
     /// <param name="wizardHandler">Optional custom handler for the wizard command.</param>
+    /// <param name="exportHandler">Optional custom handler for the export command.</param>
     /// <returns>A configured <see cref="RootCommand"/> ready for parsing and invocation.</returns>
     public static RootCommand CreateRootCommand(
         DiffCommandHandler? diffHandler = null,
