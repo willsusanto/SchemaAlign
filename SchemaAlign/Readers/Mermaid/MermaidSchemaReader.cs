@@ -4,6 +4,11 @@ using SchemaAlign.Models.TypeMapping;
 
 namespace SchemaAlign.Readers.Mermaid;
 
+/// <summary>
+/// Reads database schemas from Mermaid ER diagrams (erDiagram syntax).
+/// Supports entity definitions, column attributes, data types, nullability (via '?' suffix or 'NULL'/'nullable' comments),
+/// dimensions (length, precision, scale), PK/FK markers, and relationship cardinality.
+/// </summary>
 public class MermaidSchemaReader : ISchemaReader
 {
     private static readonly Regex FrontmatterRegex = new(@"^---\s*$", RegexOptions.Compiled);
@@ -17,6 +22,11 @@ public class MermaidSchemaReader : ISchemaReader
         @"^([a-zA-Z0-9_\.\[\]]+)\s*([\|\}o][\|o\{])\s*(--|\.\.)\s*([\|o\{][\|\{o])\s*([a-zA-Z0-9_\.\[\]]+)(?:\s*:\s*(?:""([^""]*)""|'([^']*)'|(\S*)))?",
         RegexOptions.Compiled);
 
+    /// <summary>
+    /// Reads and parses a database schema from Mermaid ER diagram text content.
+    /// </summary>
+    /// <param name="content">The Mermaid ER diagram text content.</param>
+    /// <returns>A <see cref="DatabaseSchema"/> representing the parsed schema.</returns>
     public DatabaseSchema Read(string content)
     {
         var schema = new DatabaseSchema();
@@ -133,6 +143,11 @@ public class MermaidSchemaReader : ISchemaReader
         return schema;
     }
 
+    /// <summary>
+    /// Reads and parses a database schema from a Mermaid ER diagram file.
+    /// </summary>
+    /// <param name="filePath">Path to the Mermaid diagram file (.mmd, .mermaid).</param>
+    /// <returns>A <see cref="DatabaseSchema"/> representing the parsed schema.</returns>
     public DatabaseSchema ReadFile(string filePath)
     {
         ArgumentNullException.ThrowIfNull(filePath);
@@ -186,6 +201,7 @@ public class MermaidSchemaReader : ISchemaReader
             Precision = precision,
             Scale = scale,
             IsPrimaryKey = isPrimaryKey,
+            IsForeignKey = isForeignKey,
             IsNullable = isNullable,
             Comment = comment
         };
@@ -209,26 +225,55 @@ public class MermaidSchemaReader : ISchemaReader
         }
 
         var trimmed = rawComment.Trim();
-        if (trimmed.Equals("nullable", StringComparison.OrdinalIgnoreCase))
+        if (trimmed.Equals("nullable", StringComparison.OrdinalIgnoreCase) || trimmed.Equals("NULL", StringComparison.OrdinalIgnoreCase))
         {
             isNullable = true;
             comment = null;
             return;
         }
 
-        // Check for "precision,scale, comment" or "precision,scale" (e.g. "18,2" or "18,2, Unit price")
+        if (trimmed.StartsWith("nullable,", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("NULL,", StringComparison.OrdinalIgnoreCase))
+        {
+            isNullable = true;
+            trimmed = trimmed.Substring(trimmed.IndexOf(',') + 1).Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                comment = null;
+                return;
+            }
+        }
+
+        // Check for "precision,scale, comment" or "precision,scale" (e.g. "18,2" or "18,2, NULL" or "18,2, Unit price")
         var precScaleMatch = PrecScaleCommentRegex.Match(trimmed);
         if (precScaleMatch.Success)
         {
             if (!precision.HasValue) precision = int.Parse(precScaleMatch.Groups[1].Value);
             if (!scale.HasValue) scale = int.Parse(precScaleMatch.Groups[2].Value);
-            comment = precScaleMatch.Groups[3].Success && !string.IsNullOrWhiteSpace(precScaleMatch.Groups[3].Value)
+            var rest = precScaleMatch.Groups[3].Success && !string.IsNullOrWhiteSpace(precScaleMatch.Groups[3].Value)
                 ? precScaleMatch.Groups[3].Value.Trim()
                 : null;
+
+            if (rest != null)
+            {
+                if (rest.Equals("nullable", StringComparison.OrdinalIgnoreCase) || rest.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                {
+                    isNullable = true;
+                    comment = null;
+                    return;
+                }
+
+                if (rest.StartsWith("nullable,", StringComparison.OrdinalIgnoreCase) || rest.StartsWith("NULL,", StringComparison.OrdinalIgnoreCase))
+                {
+                    isNullable = true;
+                    rest = rest.Substring(rest.IndexOf(',') + 1).Trim();
+                }
+            }
+
+            comment = string.IsNullOrWhiteSpace(rest) ? null : rest;
             return;
         }
 
-        // Check for "length, comment" or "length" (e.g. "50", "100, Title", "max, Description")
+        // Check for "length, comment" or "length" (e.g. "50", "50, NULL", "100, Title", "max, Description")
         var lenMatch = LengthCommentRegex.Match(trimmed);
         if (lenMatch.Success)
         {
@@ -237,11 +282,31 @@ public class MermaidSchemaReader : ISchemaReader
                 var lenStr = lenMatch.Groups[1].Value;
                 length = lenStr.Equals("max", StringComparison.OrdinalIgnoreCase) ? -1 : int.Parse(lenStr);
             }
-            comment = lenMatch.Groups[2].Success && !string.IsNullOrWhiteSpace(lenMatch.Groups[2].Value)
+            var rest = lenMatch.Groups[2].Success && !string.IsNullOrWhiteSpace(lenMatch.Groups[2].Value)
                 ? lenMatch.Groups[2].Value.Trim()
                 : null;
+
+            if (rest != null)
+            {
+                if (rest.Equals("nullable", StringComparison.OrdinalIgnoreCase) || rest.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                {
+                    isNullable = true;
+                    comment = null;
+                    return;
+                }
+
+                if (rest.StartsWith("nullable,", StringComparison.OrdinalIgnoreCase) || rest.StartsWith("NULL,", StringComparison.OrdinalIgnoreCase))
+                {
+                    isNullable = true;
+                    rest = rest.Substring(rest.IndexOf(',') + 1).Trim();
+                }
+            }
+
+            comment = string.IsNullOrWhiteSpace(rest) ? null : rest;
             return;
         }
+
+        comment = string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
     private static void ParseRelationshipLine(Match relMatch, DatabaseSchema schema)
@@ -301,7 +366,7 @@ public class MermaidSchemaReader : ISchemaReader
         }
 
         var principalCol = principalTable.PrimaryKeys.FirstOrDefault() ?? "Id";
-        var dependentCol = FindDependentColumn(dependentTable, principalTable);
+        var dependentCol = FindDependentColumn(dependentTable, principalTable, label);
 
         var constraintName = !string.IsNullOrWhiteSpace(label) && label.StartsWith("FK_", StringComparison.OrdinalIgnoreCase)
             ? label
@@ -320,12 +385,48 @@ public class MermaidSchemaReader : ISchemaReader
         dependentTable.AddForeignKey(fk);
     }
 
-    private static string FindDependentColumn(TableSchema dependentTable, TableSchema principalTable)
+    private static string FindDependentColumn(TableSchema dependentTable, TableSchema principalTable, string? label = null)
     {
-        // 1. Look for column ending in Id with principal table name
+        // 1. Explicit relationship label matching column name in dependent table
+        if (!string.IsNullOrWhiteSpace(label))
+        {
+            var trimmedLabel = label.Trim().Trim('"', '\'');
+            var colByLabel = dependentTable.FindColumn(trimmedLabel);
+            if (colByLabel != null)
+            {
+                return colByLabel.Name;
+            }
+
+            if (trimmedLabel.StartsWith("FK_", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = trimmedLabel.Split('_');
+                if (parts.Length > 0)
+                {
+                    var colByFkSuffix = dependentTable.FindColumn(parts[^1]);
+                    if (colByFkSuffix != null)
+                    {
+                        return colByFkSuffix.Name;
+                    }
+                }
+            }
+        }
+
+        // 2. Matching principal primary key column name in dependent table (if non-generic "Id")
+        var principalPk = principalTable.PrimaryKeys.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(principalPk) && !string.Equals(principalPk, "Id", StringComparison.OrdinalIgnoreCase))
+        {
+            var colByPk = dependentTable.FindColumn(principalPk);
+            if (colByPk != null && !colByPk.IsPrimaryKey)
+            {
+                return colByPk.Name;
+            }
+        }
+
+        // 3. Suffix & Prefix Candidates based on Principal Table Name
         var singularPrincipal = principalTable.Name.TrimEnd('s', 'S');
         var candidates = new[]
         {
+            // Suffix
             $"{principalTable.Name}Id",
             $"{singularPrincipal}Id",
             $"{principalTable.Name}_Id",
@@ -333,7 +434,15 @@ public class MermaidSchemaReader : ISchemaReader
             $"{principalTable.Name}_id",
             $"{principalTable.Name.ToLowerInvariant()}_id",
             $"{singularPrincipal.ToLowerInvariant()}_id",
-            $"{principalTable.Name.ToLowerInvariant()}id"
+            $"{principalTable.Name.ToLowerInvariant()}id",
+            // Prefix
+            $"Id{principalTable.Name}",
+            $"Id{singularPrincipal}",
+            $"Id_{principalTable.Name}",
+            $"Id_{singularPrincipal}",
+            $"id_{principalTable.Name.ToLowerInvariant()}",
+            $"id_{singularPrincipal.ToLowerInvariant()}",
+            $"id{principalTable.Name.ToLowerInvariant()}"
         };
 
         foreach (var candidate in candidates)
@@ -345,9 +454,17 @@ public class MermaidSchemaReader : ISchemaReader
             }
         }
 
-        // 2. Look for any column marked as FK or with FK-like name
+        // 4. Look for unused column explicitly marked as FK in Mermaid definition
+        var fkMarkedCol = dependentTable.Columns.Values.FirstOrDefault(c =>
+            c.IsForeignKey && !c.IsPrimaryKey && !dependentTable.ForeignKeys.Any(f => f.DependentColumn.Equals(c.Name, StringComparison.OrdinalIgnoreCase)));
+        if (fkMarkedCol != null)
+        {
+            return fkMarkedCol.Name;
+        }
+
+        // 5. Look for any other column with FK-like name (ending in Id or starting with Id)
         var fkCol = dependentTable.Columns.Values.FirstOrDefault(c =>
-            c.Name.EndsWith("Id", StringComparison.OrdinalIgnoreCase) && !c.IsPrimaryKey);
+            (c.Name.EndsWith("Id", StringComparison.OrdinalIgnoreCase) || c.Name.StartsWith("Id", StringComparison.OrdinalIgnoreCase)) && !c.IsPrimaryKey);
         if (fkCol != null)
         {
             return fkCol.Name;

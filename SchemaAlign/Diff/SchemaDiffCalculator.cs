@@ -176,10 +176,16 @@ public static class SchemaDiffCalculator
 
                         if (sourceCol.Type != targetCol.Type)
                             changes |= ChangeDetail.TypeChanged;
-                        if (sourceCol.Length != targetCol.Length)
+
+                        var isLengthApplicable = sourceCol.Type is StandardType.String or StandardType.ByteArray or StandardType.Json
+                                                 || targetCol.Type is StandardType.String or StandardType.ByteArray or StandardType.Json;
+                        if (isLengthApplicable && sourceCol.Length != targetCol.Length)
                             changes |= ChangeDetail.LengthChanged;
-                        if (sourceCol.Precision != targetCol.Precision)
+
+                        var isPrecisionApplicable = sourceCol.Type == StandardType.Decimal || targetCol.Type == StandardType.Decimal;
+                        if (isPrecisionApplicable && sourceCol.Precision != targetCol.Precision)
                             changes |= ChangeDetail.PrecisionChanged;
+
                         if (sourceCol.Scale != targetCol.Scale)
                             changes |= ChangeDetail.ScaleChanged;
                         if (sourceCol.IsNullable != targetCol.IsNullable)

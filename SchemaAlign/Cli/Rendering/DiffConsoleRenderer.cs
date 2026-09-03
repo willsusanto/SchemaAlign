@@ -85,6 +85,9 @@ public static class DiffConsoleRenderer
 
         console.Write(table);
 
+        // Legend
+        console.MarkupLine("[grey]Legend:[/] [green]+ Added[/] (in target, missing in source) | [yellow]~ Modified[/] (attribute/type differs) | [red]- Deleted[/] (in source, missing in target)");
+
         // 3. Detailed Tree View
         if (detailed)
         {
@@ -99,7 +102,7 @@ public static class DiffConsoleRenderer
     /// <param name="console">The AnsiConsole instance.</param>
     public static void RenderDetailedTree(SchemaDiff diff, IAnsiConsole console)
     {
-        var root = new Tree("[bold underline]Detailed Changes[/]");
+        var root = new Tree("[bold underline]Detailed Changes[/] [grey]([green]+ Added[/] | [yellow]~ Modified[/] | [red]- Deleted[/])[/]");
 
         foreach (var t in diff.Tables.Where(x => x.HasChanges))
         {

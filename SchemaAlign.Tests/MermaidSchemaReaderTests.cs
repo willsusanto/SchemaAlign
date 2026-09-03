@@ -641,5 +641,127 @@ public class MermaidSchemaReaderTests
         var requestItem = schema.Tables["RequestItem"];
         requestItem.ForeignKeys.Should().HaveCount(2);
     }
+
+    [Fact]
+    public void Parse_AttributeWithForeignKeyFlag_SetsIsForeignKeyFlag()
+    {
+        var mermaid = """
+            erDiagram
+                SampleDependent {
+                    int Id PK
+                    string StatusCode FK
+                }
+            """;
+
+        var schema = _reader.Read(mermaid);
+        var table = schema.Tables["SampleDependent"];
+        table.Columns["StatusCode"].IsForeignKey.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Parse_RelationshipWithLabel_ResolvesCustomForeignKeyColumn()
+    {
+        var mermaid = """
+            erDiagram
+                SamplePrincipal {
+                    string IdPrincipalKey PK
+                    string Title
+                }
+                SampleDependent {
+                    int Id PK
+                    string CustomStatusCode FK
+                }
+                SamplePrincipal ||--o{ SampleDependent : CustomStatusCode
+            """;
+
+        var schema = _reader.Read(mermaid);
+        var dependent = schema.Tables["SampleDependent"];
+        dependent.ForeignKeys.Should().HaveCount(1);
+        var fk = dependent.ForeignKeys[0];
+        fk.PrincipalTable.Should().Be("SamplePrincipal");
+        fk.PrincipalColumn.Should().Be("IdPrincipalKey");
+        fk.DependentColumn.Should().Be("CustomStatusCode");
+    }
+
+    [Fact]
+    public void Parse_RelationshipWithPrefixIdColumn_ResolvesForeignKey()
+    {
+        var mermaid = """
+            erDiagram
+                SamplePrincipalEntity {
+                    string Id PK
+                }
+                SampleDependentEntity {
+                    int Id PK
+                    string IdSamplePrincipalEntity FK
+                }
+                SamplePrincipalEntity ||--o{ SampleDependentEntity : has
+            """;
+
+        var schema = _reader.Read(mermaid);
+        var dependent = schema.Tables["SampleDependentEntity"];
+        dependent.ForeignKeys.Should().HaveCount(1);
+        var fk = dependent.ForeignKeys[0];
+        fk.PrincipalTable.Should().Be("SamplePrincipalEntity");
+        fk.DependentColumn.Should().Be("IdSamplePrincipalEntity");
+    }
+
+    [Fact]
+    public void Parse_NullableColumns_SupportsQuestionMarkAndNullComments()
+    {
+        var mermaid = """
+            erDiagram
+                SampleUserTable {
+                    int Id PK "NULL"
+                    string MandatoryField
+                    string MandatoryWithDesc "100, Required code"
+                    string? NullableWithQuestionMark
+                    string NullableWithNullComment "NULL"
+                    string NullableWithNullableComment "nullable"
+                    string NullableWithLengthAndNull "50, NULL"
+                    string NullableWithLengthNullAndDesc "100, NULL, Optional display name"
+                    decimal NullableWithPrecScaleAndNull "18,2, NULL, Optional rate"
+                    string NullableWithNullPrefix "NULL, User bio"
+                }
+            """;
+
+        var schema = _reader.Read(mermaid);
+        var table = schema.Tables["SampleUserTable"];
+
+        // PK is always mandatory
+        table.Columns["Id"].IsPrimaryKey.Should().BeTrue();
+        table.Columns["Id"].IsNullable.Should().BeFalse();
+
+        // Mandatory fields
+        table.Columns["MandatoryField"].IsNullable.Should().BeFalse();
+        table.Columns["MandatoryWithDesc"].IsNullable.Should().BeFalse();
+        table.Columns["MandatoryWithDesc"].Length.Should().Be(100);
+        table.Columns["MandatoryWithDesc"].Comment.Should().Be("Required code");
+
+        // Nullable fields
+        table.Columns["NullableWithQuestionMark"].IsNullable.Should().BeTrue();
+
+        table.Columns["NullableWithNullComment"].IsNullable.Should().BeTrue();
+        table.Columns["NullableWithNullComment"].Comment.Should().BeNull();
+
+        table.Columns["NullableWithNullableComment"].IsNullable.Should().BeTrue();
+        table.Columns["NullableWithNullableComment"].Comment.Should().BeNull();
+
+        table.Columns["NullableWithLengthAndNull"].IsNullable.Should().BeTrue();
+        table.Columns["NullableWithLengthAndNull"].Length.Should().Be(50);
+        table.Columns["NullableWithLengthAndNull"].Comment.Should().BeNull();
+
+        table.Columns["NullableWithLengthNullAndDesc"].IsNullable.Should().BeTrue();
+        table.Columns["NullableWithLengthNullAndDesc"].Length.Should().Be(100);
+        table.Columns["NullableWithLengthNullAndDesc"].Comment.Should().Be("Optional display name");
+
+        table.Columns["NullableWithPrecScaleAndNull"].IsNullable.Should().BeTrue();
+        table.Columns["NullableWithPrecScaleAndNull"].Precision.Should().Be(18);
+        table.Columns["NullableWithPrecScaleAndNull"].Scale.Should().Be(2);
+        table.Columns["NullableWithPrecScaleAndNull"].Comment.Should().Be("Optional rate");
+
+        table.Columns["NullableWithNullPrefix"].IsNullable.Should().BeTrue();
+        table.Columns["NullableWithNullPrefix"].Comment.Should().Be("User bio");
+    }
 }
 

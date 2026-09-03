@@ -1,5 +1,8 @@
 namespace SchemaAlign.Models;
 
+/// <summary>
+/// Represents the schema definition of a single database column or entity property.
+/// </summary>
 public class ColumnSchema
 {
     public string Name { get; set; } = string.Empty;
@@ -10,6 +13,7 @@ public class ColumnSchema
     public int? Scale { get; set; }
     public bool IsNullable { get; set; }
     public bool IsPrimaryKey { get; set; }
+    public bool IsForeignKey { get; set; }
     public bool IsIdentity { get; set; }
     public string? DefaultValue { get; set; }
     public string? Comment { get; set; }

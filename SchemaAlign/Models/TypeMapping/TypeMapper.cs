@@ -216,11 +216,26 @@ public static class TypeMapper
         };
     }
 
+    /// <summary>
+    /// Parses a Mermaid data type string into a <see cref="StandardType"/> with optional length.
+    /// </summary>
+    /// <param name="mermaidType">The raw Mermaid type string (e.g., varchar(50), int).</param>
+    /// <param name="length">Extracted string or binary length, if any.</param>
+    /// <returns>The mapped <see cref="StandardType"/>.</returns>
     public static StandardType FromMermaidType(string mermaidType, out int? length)
     {
         return FromMermaidType(mermaidType, out length, out _, out _);
     }
 
+    /// <summary>
+    /// Parses a Mermaid data type string into a <see cref="StandardType"/> with optional length, precision, and scale dimensions.
+    /// Dimensions are normalized to only apply to relevant types (e.g. length for string/bytes/json, precision/scale for decimal).
+    /// </summary>
+    /// <param name="mermaidType">The raw Mermaid type string (e.g., decimal(18,2), varchar(50)).</param>
+    /// <param name="length">Extracted string or binary length, if any.</param>
+    /// <param name="precision">Extracted numeric precision, if any.</param>
+    /// <param name="scale">Extracted numeric scale, if any.</param>
+    /// <returns>The mapped <see cref="StandardType"/>.</returns>
     public static StandardType FromMermaidType(string mermaidType, out int? length, out int? precision, out int? scale)
     {
         length = null;
@@ -276,8 +291,14 @@ public static class TypeMapper
         {
             length = null;
         }
+        else if (stdType is StandardType.String or StandardType.ByteArray or StandardType.Json)
+        {
+            precision = null;
+            scale = null;
+        }
         else
         {
+            length = null;
             precision = null;
             scale = null;
         }
