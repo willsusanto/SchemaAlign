@@ -20,7 +20,8 @@ public static class CommandLineConfiguration
         DiffCommandHandler? diffHandler = null,
         SyncCommandHandler? syncHandler = null,
         InspectCommandHandler? inspectHandler = null,
-        WizardCommandHandler? wizardHandler = null)
+        WizardCommandHandler? wizardHandler = null,
+        ExportCommandHandler? exportHandler = null)
     {
         var rootCommand = new RootCommand("SchemaAlign - Universal Database & Entity Schema Alignment Tool");
 
@@ -221,9 +222,84 @@ public static class CommandLineConfiguration
             return await handler.RunAsync(options);
         });
 
+        // --- export command ---
+        var exportSourceOpt = new Option<string>("--source")
+        {
+            Description = "Path to Mermaid schema file (.mmd, .mermaid)",
+            Required = true
+        };
+        exportSourceOpt.Aliases.Add("-s");
+        exportSourceOpt.Aliases.Add("--from");
+
+        var exportOutputOpt = new Option<string>("--output")
+        {
+            Description = "Path to output Excel file (.xlsx)",
+            Required = true
+        };
+        exportOutputOpt.Aliases.Add("-o");
+
+        var exportConfigOpt = new Option<string?>("--config")
+        {
+            Description = "Optional path to schemaalign.json configuration file",
+            DefaultValueFactory = _ => null
+        };
+        exportConfigOpt.Aliases.Add("-c");
+
+        var exportAidOpt = new Option<string?>("--aid")
+        {
+            Description = "Application ID (AID) metadata value",
+            DefaultValueFactory = _ => null
+        };
+
+        var exportIpOpt = new Option<string?>("--ip")
+        {
+            Description = "IP / Domain / Azure Cosmos host metadata value",
+            DefaultValueFactory = _ => null
+        };
+
+        var exportDbOpt = new Option<string?>("--db")
+        {
+            Description = "SQL DB / Azure DB / Cosmos DB name metadata value",
+            DefaultValueFactory = _ => null
+        };
+
+        var exportTitleOpt = new Option<string?>("--title")
+        {
+            Description = "System title header value",
+            DefaultValueFactory = _ => null
+        };
+
+        var exportCommand = new Command("export", "Export Mermaid schema to Excel Data Dictionary (.xlsx)")
+        {
+            exportSourceOpt,
+            exportOutputOpt,
+            exportConfigOpt,
+            exportAidOpt,
+            exportIpOpt,
+            exportDbOpt,
+            exportTitleOpt
+        };
+
+        exportCommand.SetAction(async parseResult =>
+        {
+            var handler = exportHandler ?? new ExportCommandHandler();
+            var options = new ExportCommandOptions
+            {
+                Source = parseResult.GetValue(exportSourceOpt) ?? string.Empty,
+                Output = parseResult.GetValue(exportOutputOpt) ?? string.Empty,
+                Config = parseResult.GetValue(exportConfigOpt),
+                Aid = parseResult.GetValue(exportAidOpt),
+                Ip = parseResult.GetValue(exportIpOpt),
+                Db = parseResult.GetValue(exportDbOpt),
+                Title = parseResult.GetValue(exportTitleOpt)
+            };
+            return await handler.RunAsync(options);
+        });
+
         rootCommand.Add(diffCommand);
         rootCommand.Add(syncCommand);
         rootCommand.Add(inspectCommand);
+        rootCommand.Add(exportCommand);
 
         rootCommand.SetAction(async parseResult =>
         {
