@@ -37,12 +37,13 @@ public class DictionaryConfigLoaderTests : IDisposable
             cliDb: null,
             cliTitle: null,
             sourcePath: "masked-diagram.mmd",
-            outputPath: "masked-output.xlsx");
+            outputPath: "masked-output.xlsx",
+            searchDirectory: _tempDir);
 
-        options.Aid.Should().Be("1191");
-        options.IpDomain.Should().Be("ssg5-newlibrary-dev.binus.db");
-        options.DatabaseName.Should().Be("LIBRARY_DB");
-        options.SystemTitle.Should().Be("New Library System");
+        options.Aid.Should().Be("-");
+        options.IpDomain.Should().Be("-");
+        options.DatabaseName.Should().Be("DATABASE");
+        options.SystemTitle.Should().Be("Data Dictionary");
         options.SourcePath.Should().Be("masked-diagram.mmd");
         options.OutputPath.Should().Be("masked-output.xlsx");
     }
@@ -57,7 +58,13 @@ public class DictionaryConfigLoaderTests : IDisposable
                     "aid": "4321",
                     "ip": "custom-ip.domain.local",
                     "database": "CUSTOM_DB",
-                    "systemTitle": "Custom Title System"
+                    "systemTitle": "Custom Title System",
+                    "columnDefaults": {
+                        "MockAudit": {
+                            "notes": "Configured note",
+                            "sample": "CONFIG-SAMPLE"
+                        }
+                    }
                 }
             }
             """);
@@ -68,13 +75,16 @@ public class DictionaryConfigLoaderTests : IDisposable
             cliIp: null,
             cliDb: null,
             cliTitle: null,
-            sourcePath: "diagram.mmd",
-            outputPath: "out.xlsx");
+            sourcePath: "masked-diagram.mmd",
+            outputPath: "masked-output.xlsx");
 
         options.Aid.Should().Be("4321");
         options.IpDomain.Should().Be("custom-ip.domain.local");
         options.DatabaseName.Should().Be("CUSTOM_DB");
         options.SystemTitle.Should().Be("Custom Title System");
+        options.ColumnDefaults.Should().ContainKey("MockAudit");
+        options.ColumnDefaults["MockAudit"].Notes.Should().Be("Configured note");
+        options.ColumnDefaults["MockAudit"].Sample.Should().Be("CONFIG-SAMPLE");
     }
 
     [Fact]

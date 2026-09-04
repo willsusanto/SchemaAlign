@@ -127,4 +127,40 @@ public class ConfigurationLoaderTests
             }
         }
     }
+
+    [Fact]
+    public void ParseJson_WithDictionaryConfiguration_ParsesDictionarySectionAndColumnDefaults()
+    {
+        var json = """
+            {
+              "dictionary": {
+                "aid": "APP-99",
+                "ip": "mock-db.internal",
+                "database": "MOCK_DB",
+                "systemTitle": "Mock System",
+                "columnDefaults": {
+                  "MockStatus": {
+                    "notes": "Status flag",
+                    "sample": "0, 1"
+                  },
+                  "MockUser": {
+                    "notes": "User identifier",
+                    "sample": "USR-123"
+                  }
+                }
+              }
+            }
+            """;
+
+        var config = ConfigurationLoader.Parse(json);
+        config.Should().NotBeNull();
+        config.Dictionary.Should().NotBeNull();
+        config.Dictionary.Aid.Should().Be("APP-99");
+        config.Dictionary.Ip.Should().Be("mock-db.internal");
+        config.Dictionary.Database.Should().Be("MOCK_DB");
+        config.Dictionary.SystemTitle.Should().Be("Mock System");
+        config.Dictionary.ColumnDefaults.Should().ContainKey("MockStatus");
+        config.Dictionary.ColumnDefaults["MockStatus"].Notes.Should().Be("Status flag");
+        config.Dictionary.ColumnDefaults["MockStatus"].Sample.Should().Be("0, 1");
+    }
 }

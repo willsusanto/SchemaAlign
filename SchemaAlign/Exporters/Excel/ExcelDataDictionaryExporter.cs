@@ -168,7 +168,7 @@ public class ExcelDataDictionaryExporter
                     ws.Cell(row, 13).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                 }
 
-                var (notes, sampleData) = ResolveNotesAndSampleData(column);
+                var (notes, sampleData) = ResolveNotesAndSampleData(column, options);
                 ws.Cell(row, 14).Value = notes;
                 ws.Cell(row, 15).Value = sampleData;
 
@@ -332,22 +332,16 @@ public class ExcelDataDictionaryExporter
         return sanitized.Length > 31 ? sanitized.Substring(0, 31) : sanitized;
     }
 
-    private static (string Notes, string SampleData) ResolveNotesAndSampleData(ColumnSchema column)
+    private static (string Notes, string SampleData) ResolveNotesAndSampleData(ColumnSchema column, DictionaryExportOptions options)
     {
-        switch (column.Name.Trim().ToLowerInvariant())
+        var colName = column.Name.Trim();
+        if (options.ColumnDefaults.TryGetValue(colName, out var colDefault))
         {
-            case "stsrc":
-                return ("Status record data", "0.1");
-            case "userin":
-                return ("User yang melakukan input data", "GUID");
-            case "datein":
-                return ("Tanggal data di input", "2026-01-22 09:25:18.8933333");
-            case "userup":
-                return ("User yang melakukan update data", "GUID");
-            case "dateup":
-                return ("Tanggal data di update", "2026-01-22 09:25:18.8933333");
-            default:
-                return (column.Comment ?? string.Empty, string.Empty);
+            var notes = !string.IsNullOrWhiteSpace(colDefault.Notes) ? colDefault.Notes : (column.Comment ?? string.Empty);
+            var sample = colDefault.Sample ?? string.Empty;
+            return (notes, sample);
         }
+
+        return (column.Comment ?? string.Empty, string.Empty);
     }
 }

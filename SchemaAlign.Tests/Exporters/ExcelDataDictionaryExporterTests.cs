@@ -1,4 +1,5 @@
 using ClosedXML.Excel;
+using SchemaAlign.Configuration;
 using SchemaAlign.Exporters.Excel;
 using SchemaAlign.Models;
 using SchemaAlign.Readers.Mermaid;
@@ -317,18 +318,15 @@ public class ExcelDataDictionaryExporterTests : IDisposable
     }
 
     [Fact]
-    public void Export_PopulatesDefaultAuditNotesAndSampleData()
+    public void Export_WithoutConfiguredColumnDefaults_PreservesCommentsAndLeavesSampleDataEmpty()
     {
         var mermaidContent = """
             erDiagram
                 MockAuditedEntity {
                     nvarchar(36) IdMock PK
                     nvarchar(100) Remarks "Specific audit remark"
-                    bit Stsrc
-                    nvarchar(36) UserIn
-                    datetime DateIn
-                    nvarchar(36) UserUp "NULL"
-                    datetime DateUp "NULL"
+                    bit MockStatus
+                    nvarchar(36) MockUser
                 }
             """;
 
@@ -338,7 +336,7 @@ public class ExcelDataDictionaryExporterTests : IDisposable
         var options = new DictionaryExportOptions
         {
             DatabaseName = "AUDIT_DB",
-            OutputPath = Path.Combine(_tempOutputDir, "output_audit.xlsx")
+            OutputPath = Path.Combine(_tempOutputDir, "output_default_empty.xlsx")
         };
 
         var exporter = new ExcelDataDictionaryExporter();
@@ -356,30 +354,63 @@ public class ExcelDataDictionaryExporterTests : IDisposable
         ws.Cell("N4").GetString().Should().Be("Specific audit remark");
         ws.Cell("O4").GetString().Should().Be(string.Empty);
 
-        // Row 5: Stsrc
-        ws.Cell("E5").GetString().Should().Be("Stsrc");
-        ws.Cell("N5").GetString().Should().Be("Status record data");
-        ws.Cell("O5").GetString().Should().Be("0.1");
+        // Row 5: MockStatus -> Without configured defaults, Notes and Sample Data are empty
+        ws.Cell("E5").GetString().Should().Be("MockStatus");
+        ws.Cell("N5").GetString().Should().Be(string.Empty);
+        ws.Cell("O5").GetString().Should().Be(string.Empty);
 
-        // Row 6: UserIn
-        ws.Cell("E6").GetString().Should().Be("UserIn");
-        ws.Cell("N6").GetString().Should().Be("User yang melakukan input data");
-        ws.Cell("O6").GetString().Should().Be("GUID");
+        // Row 6: MockUser -> Without configured defaults, Notes and Sample Data are empty
+        ws.Cell("E6").GetString().Should().Be("MockUser");
+        ws.Cell("N6").GetString().Should().Be(string.Empty);
+        ws.Cell("O6").GetString().Should().Be(string.Empty);
+    }
 
-        // Row 7: DateIn
-        ws.Cell("E7").GetString().Should().Be("DateIn");
-        ws.Cell("N7").GetString().Should().Be("Tanggal data di input");
-        ws.Cell("O7").GetString().Should().Be("2026-01-22 09:25:18.8933333");
+    [Fact]
+    public void Export_WithConfiguredColumnDefaults_PopulatesConfiguredNotesAndSampleData()
+    {
+        var mermaidContent = """
+            erDiagram
+                MockAuditedEntity {
+                    nvarchar(36) IdMock PK
+                    bit MockStatus
+                    nvarchar(36) MockUser
+                }
+            """;
 
-        // Row 8: UserUp
-        ws.Cell("E8").GetString().Should().Be("UserUp");
-        ws.Cell("N8").GetString().Should().Be("User yang melakukan update data");
-        ws.Cell("O8").GetString().Should().Be("GUID");
+        var reader = new MermaidSchemaReader();
+        var schema = reader.Read(mermaidContent);
 
-        // Row 9: DateUp
-        ws.Cell("E9").GetString().Should().Be("DateUp");
-        ws.Cell("N9").GetString().Should().Be("Tanggal data di update");
-        ws.Cell("O9").GetString().Should().Be("2026-01-22 09:25:18.8933333");
+        var options = new DictionaryExportOptions
+        {
+            DatabaseName = "AUDIT_DB",
+            OutputPath = Path.Combine(_tempOutputDir, "output_configured.xlsx")
+        };
+        options.ColumnDefaults["MockStatus"] = new SchemaAlign.Configuration.DictionaryColumnDefault
+        {
+            Notes = "Custom status description",
+            Sample = "0, 1"
+        };
+        options.ColumnDefaults["MockUser"] = new SchemaAlign.Configuration.DictionaryColumnDefault
+        {
+            Notes = "User identifier GUID",
+            Sample = "USR-GUID-001"
+        };
+
+        var exporter = new ExcelDataDictionaryExporter();
+        exporter.Export(schema, options);
+
+        using var workbook = new XLWorkbook(options.OutputPath);
+        var ws = workbook.Worksheet("AUDIT_DB");
+
+        // Row 4: MockStatus -> Uses configured notes and sample
+        ws.Cell("E4").GetString().Should().Be("MockStatus");
+        ws.Cell("N4").GetString().Should().Be("Custom status description");
+        ws.Cell("O4").GetString().Should().Be("0, 1");
+
+        // Row 5: MockUser -> Uses configured notes and sample
+        ws.Cell("E5").GetString().Should().Be("MockUser");
+        ws.Cell("N5").GetString().Should().Be("User identifier GUID");
+        ws.Cell("O5").GetString().Should().Be("USR-GUID-001");
     }
 
     [Fact]
@@ -428,6 +459,11 @@ public class ExcelDataDictionaryExporterTests : IDisposable
             SystemTitle = "HR Enterprise System",
             OutputPath = outputPath
         };
+        options.ColumnDefaults["Stsrc"] = new DictionaryColumnDefault { Notes = "Status record data", Sample = "0.1" };
+        options.ColumnDefaults["UserIn"] = new DictionaryColumnDefault { Notes = "User yang melakukan input data", Sample = "GUID" };
+        options.ColumnDefaults["DateIn"] = new DictionaryColumnDefault { Notes = "Tanggal data di input", Sample = "2026-01-22 09:25:18.8933333" };
+        options.ColumnDefaults["UserUp"] = new DictionaryColumnDefault { Notes = "User yang melakukan update data", Sample = "GUID" };
+        options.ColumnDefaults["DateUp"] = new DictionaryColumnDefault { Notes = "Tanggal data di update", Sample = "2026-01-22 09:25:18.8933333" };
 
         var exporter = new ExcelDataDictionaryExporter();
         exporter.Export(schema, options);

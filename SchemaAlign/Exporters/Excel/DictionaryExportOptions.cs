@@ -1,3 +1,5 @@
+using SchemaAlign.Configuration;
+
 namespace SchemaAlign.Exporters.Excel;
 
 /// <summary>
@@ -5,10 +7,10 @@ namespace SchemaAlign.Exporters.Excel;
 /// </summary>
 public class DictionaryExportOptions
 {
-    public const string DefaultAid = "1191";
-    public const string DefaultIpDomain = "ssg5-newlibrary-dev.binus.db";
-    public const string DefaultDatabaseName = "LIBRARY_DB";
-    public const string DefaultSystemTitle = "New Library System";
+    public const string DefaultAid = "-";
+    public const string DefaultIpDomain = "-";
+    public const string DefaultDatabaseName = "DATABASE";
+    public const string DefaultSystemTitle = "Data Dictionary";
 
     public string SourcePath { get; set; } = string.Empty;
     public string OutputPath { get; set; } = string.Empty;
@@ -28,4 +30,9 @@ public class DictionaryExportOptions
     /// Defaults to "#ffcccc".
     /// </summary>
     public string HighlightColor { get; set; } = "#ffcccc";
+
+    /// <summary>
+    /// Pre-configured notes and sample data mapped by column name (case-insensitive).
+    /// </summary>
+    public Dictionary<string, DictionaryColumnDefault> ColumnDefaults { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

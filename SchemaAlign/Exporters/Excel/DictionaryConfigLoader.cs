@@ -1,33 +1,12 @@
-using System.Text.Json;
+using SchemaAlign.Configuration;
 
 namespace SchemaAlign.Exporters.Excel;
 
 /// <summary>
-/// Loads and merges dictionary export configuration from schemaalign.json and CLI arguments.
+/// Loads and merges dictionary export configuration from .schemaalign.json and CLI arguments.
 /// </summary>
 public static class DictionaryConfigLoader
 {
-    private class ConfigFileModel
-    {
-        public DictionarySection? Dictionary { get; set; }
-        public string? Aid { get; set; }
-        public string? Ip { get; set; }
-        public string? Database { get; set; }
-        public string? SystemTitle { get; set; }
-        public List<string>? HighlightClasses { get; set; }
-        public string? HighlightColor { get; set; }
-    }
-
-    private class DictionarySection
-    {
-        public string? Aid { get; set; }
-        public string? Ip { get; set; }
-        public string? Database { get; set; }
-        public string? SystemTitle { get; set; }
-        public List<string>? HighlightClasses { get; set; }
-        public string? HighlightColor { get; set; }
-    }
-
     /// <summary>
     /// Loads and merges dictionary export options from a configuration file and CLI flags.
     /// </summary>
@@ -38,7 +17,8 @@ public static class DictionaryConfigLoader
         string? cliDb,
         string? cliTitle,
         string sourcePath,
-        string outputPath)
+        string outputPath,
+        string? searchDirectory = null)
     {
         var options = new DictionaryExportOptions
         {
@@ -47,48 +27,36 @@ public static class DictionaryConfigLoader
             ConfigPath = configPath
         };
 
-        // Resolve config file path: explicit path or default ./schemaalign.json
-        var resolvedConfigPath = configPath;
-        if (string.IsNullOrWhiteSpace(resolvedConfigPath))
-        {
-            var defaultFile = Path.Combine(Directory.GetCurrentDirectory(), "schemaalign.json");
-            if (File.Exists(defaultFile))
-            {
-                resolvedConfigPath = defaultFile;
-            }
-        }
+        // Resolve config file path: explicit path or upward discovery via ConfigurationLoader
+        var resolvedConfigPath = !string.IsNullOrWhiteSpace(configPath)
+            ? configPath
+            : ConfigurationLoader.FindConfigFile(searchDirectory);
 
         if (!string.IsNullOrWhiteSpace(resolvedConfigPath) && File.Exists(resolvedConfigPath))
         {
             try
             {
                 var json = File.ReadAllText(resolvedConfigPath);
-                var doc = JsonSerializer.Deserialize<ConfigFileModel>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+                var config = ConfigurationLoader.Parse(json);
 
-                if (doc != null)
+                if (config.Dictionary != null)
                 {
-                    var section = doc.Dictionary;
-                    var cfgAid = section?.Aid ?? doc.Aid;
-                    var cfgIp = section?.Ip ?? doc.Ip;
-                    var cfgDb = section?.Database ?? doc.Database;
-                    var cfgTitle = section?.SystemTitle ?? doc.SystemTitle;
-                    var cfgHighlightClasses = section?.HighlightClasses ?? doc.HighlightClasses;
-                    var cfgHighlightColor = section?.HighlightColor ?? doc.HighlightColor;
-
-                    if (!string.IsNullOrWhiteSpace(cfgAid)) options.Aid = cfgAid;
-                    if (!string.IsNullOrWhiteSpace(cfgIp)) options.IpDomain = cfgIp;
-                    if (!string.IsNullOrWhiteSpace(cfgDb)) options.DatabaseName = cfgDb;
-                    if (!string.IsNullOrWhiteSpace(cfgTitle)) options.SystemTitle = cfgTitle;
-                    if (cfgHighlightClasses != null)
+                    if (!string.IsNullOrWhiteSpace(config.Dictionary.Aid)) options.Aid = config.Dictionary.Aid;
+                    if (!string.IsNullOrWhiteSpace(config.Dictionary.Ip)) options.IpDomain = config.Dictionary.Ip;
+                    if (!string.IsNullOrWhiteSpace(config.Dictionary.Database)) options.DatabaseName = config.Dictionary.Database;
+                    if (!string.IsNullOrWhiteSpace(config.Dictionary.SystemTitle)) options.SystemTitle = config.Dictionary.SystemTitle;
+                    if (config.Dictionary.HighlightClasses != null)
                     {
-                        options.HighlightClasses = new HashSet<string>(cfgHighlightClasses, StringComparer.OrdinalIgnoreCase);
+                        options.HighlightClasses = new HashSet<string>(config.Dictionary.HighlightClasses, StringComparer.OrdinalIgnoreCase);
                     }
-                    if (!string.IsNullOrWhiteSpace(cfgHighlightColor))
+                    if (!string.IsNullOrWhiteSpace(config.Dictionary.HighlightColor))
                     {
-                        options.HighlightColor = cfgHighlightColor;
+                        options.HighlightColor = config.Dictionary.HighlightColor;
+                    }
+
+                    foreach (var (colName, colDefault) in config.Dictionary.ColumnDefaults)
+                    {
+                        options.ColumnDefaults[colName] = colDefault;
                     }
                 }
             }
