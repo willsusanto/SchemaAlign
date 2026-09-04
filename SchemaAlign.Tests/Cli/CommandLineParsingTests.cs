@@ -156,6 +156,31 @@ public class CommandLineParsingTests
         capturedOptions.Output.Should().Be("json");
     }
 
+    [Fact]
+    public async Task ExportCommand_ParsesAllOptionsAndAliases()
+    {
+        ExportCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestExportHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(exportHandler: mockHandler);
+        var exitCode = await root.Parse("export -s schema.mmd -o out.xlsx -c custom.json --aid 2026 --ip db.internal --db PROD_DB --title \"Custom Title\"").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Source.Should().Be("schema.mmd");
+        capturedOptions.Output.Should().Be("out.xlsx");
+        capturedOptions.Config.Should().Be("custom.json");
+        capturedOptions.Aid.Should().Be("2026");
+        capturedOptions.Ip.Should().Be("db.internal");
+        capturedOptions.Db.Should().Be("PROD_DB");
+        capturedOptions.Title.Should().Be("Custom Title");
+    }
+
     private class TestDiffHandler : DiffCommandHandler
     {
         private readonly Func<DiffCommandOptions, Task<int>> _action;
@@ -175,5 +200,12 @@ public class CommandLineParsingTests
         private readonly Func<InspectCommandOptions, Task<int>> _action;
         public TestInspectHandler(Func<InspectCommandOptions, Task<int>> action) => _action = action;
         public override Task<int> RunAsync(InspectCommandOptions options, CancellationToken ct = default) => _action(options);
+    }
+
+    private class TestExportHandler : ExportCommandHandler
+    {
+        private readonly Func<ExportCommandOptions, Task<int>> _action;
+        public TestExportHandler(Func<ExportCommandOptions, Task<int>> action) => _action = action;
+        public override Task<int> RunAsync(ExportCommandOptions options, CancellationToken ct = default) => _action(options);
     }
 }
