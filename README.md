@@ -13,6 +13,7 @@ Universal database and entity schema alignment tool for .NET. SchemaAlign parses
 - **Destructive Change Safeguards**: Protects against accidental table and column drops unless explicitly enabled with `--allow-drop`.
 - **In-place Roslyn Entity Rewriter**: Updates existing C# entity classes while preserving custom methods, comments, and formatting.
 - **Idempotent SQL Server Migration Applier**: Generates guarded T-SQL DDL migration scripts (`.sql`) and applies schema updates directly against live SQL Server databases.
+- **Excel Data Dictionary Export**: Exports Mermaid ER diagrams to styled Excel (`.xlsx`) data dictionaries with AID, database metadata, foreign key references, and table styling.
 
 ## CLI Usage
 
@@ -66,3 +67,19 @@ dotnet run --project SchemaAlign -- inspect --source ./docs/schema.mmd
 **Options**:
 - `-s`, `--source` *(required)*: Path to schema file or directory to inspect (supports semicolon/comma-separated multi-paths). Aliases: `--from`.
 - `-o`, `--output`: Output format (`console` [default] or `json`).
+
+#### `export`
+Export Mermaid schema to an Excel Data Dictionary (`.xlsx`):
+
+```bash
+dotnet run --project SchemaAlign -- export --source ./docs/schema.mmd --output ./docs/dictionary.xlsx
+```
+
+**Options**:
+- `-s`, `--source` *(required)*: Path to Mermaid schema file (`.mmd`, `.mermaid`). Aliases: `--from`.
+- `-o`, `--output` *(required)*: Path to output Excel file (`.xlsx`).
+- `-c`, `--config`: Optional path to `schemaalign.json` configuration file. Aliases: `-c`.
+- `--aid`: Application ID (AID) metadata value.
+- `--ip`: IP / Domain / Azure Cosmos host metadata value.
+- `--db`: SQL DB / Azure DB / Cosmos DB name metadata value.
+- `--title`: System title header value.

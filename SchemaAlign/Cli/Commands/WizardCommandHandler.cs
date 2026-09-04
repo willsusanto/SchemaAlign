@@ -12,12 +12,14 @@ public class WizardCommandHandler
     private readonly DiffCommandHandler _diffHandler;
     private readonly SyncCommandHandler _syncHandler;
     private readonly InspectCommandHandler _inspectHandler;
+    private readonly ExportCommandHandler _exportHandler;
     private readonly IAnsiConsole _console;
 
     public WizardCommandHandler(
         DiffCommandHandler? diffHandler = null,
         SyncCommandHandler? syncHandler = null,
         InspectCommandHandler? inspectHandler = null,
+        ExportCommandHandler? exportHandler = null,
         IAnsiConsole? console = null)
     {
         _console = console ?? AnsiConsole.Console;
@@ -27,6 +29,7 @@ public class WizardCommandHandler
         _diffHandler = diffHandler ?? new DiffCommandHandler(detection, _console);
         _syncHandler = syncHandler ?? new SyncCommandHandler(registry, detection, _console);
         _inspectHandler = inspectHandler ?? new InspectCommandHandler(detection, _console);
+        _exportHandler = exportHandler ?? new ExportCommandHandler(_console);
     }
 
     /// <summary>
@@ -45,10 +48,18 @@ public class WizardCommandHandler
                 .AddChoices("1. Diff Schemas (Compare without modifying)",
                             "2. Sync Target (Review, preview, and apply changes)",
                             "3. Inspect Schema (View parsed tables & columns)",
-                            "4. Exit"));
+                            "4. Export Data Dictionary (Generate Excel .xlsx from Mermaid)",
+                            "5. Exit"));
+
+        if (action.StartsWith("5"))
+            return 0;
 
         if (action.StartsWith("4"))
-            return 0;
+        {
+            var source = _console.Ask<string>("[bold]Enter Mermaid schema path (e.g. schema.mmd):[/]");
+            var output = _console.Ask<string>("[bold]Enter output Excel file path (e.g. dictionary.xlsx):[/]");
+            return await _exportHandler.RunAsync(new ExportCommandOptions { Source = source, Output = output }, cancellationToken);
+        }
 
         if (action.StartsWith("3"))
         {

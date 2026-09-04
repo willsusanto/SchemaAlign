@@ -78,3 +78,8 @@ ehthumbs.db
 *.stackdump
 *.tmp
 *.temp
+
+## Generated Excel outputs and office locks
+*.xlsx
+~$*
+sprint5.mmd
