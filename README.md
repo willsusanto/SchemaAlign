@@ -13,8 +13,8 @@ Universal database and entity schema alignment tool for .NET. SchemaAlign parses
 - **Destructive Change Safeguards**: Protects against accidental table and column drops unless explicitly enabled with `--allow-drop`.
 - **In-place Roslyn Entity Rewriter**: Updates existing C# entity classes while preserving custom methods, comments, and formatting.
 - **Idempotent SQL Server Migration Applier**: Generates guarded T-SQL DDL migration scripts (`.sql`) and applies schema updates directly against live SQL Server databases.
-- **Excel Data Dictionary Export**: Exports Mermaid ER diagrams to styled Excel (`.xlsx`) data dictionaries with AID, database metadata, foreign key references, table styling, and table classification background highlighting.
-- **Configuration & Conventions**: Supports `.schemaalign.json` configuration files with directory hierarchy traversal, custom base classes with auto-inherited property omission, custom class attributes, and extra using directives.
+- **Excel Data Dictionary Export**: Exports Mermaid ER diagrams to styled Excel (`.xlsx`) data dictionaries with configurable metadata, foreign key references, table styling, and table classification background highlighting.
+- **Configuration & Conventions**: Supports `.schemaalign.json` configuration files with directory hierarchy traversal, custom base classes with auto-inherited property omission, custom class attributes, extra using directives, and configurable dictionary column defaults.
 
 ## CLI Usage
 
@@ -125,13 +125,23 @@ SchemaAlign automatically discovers `.schemaalign.json` (or `schemaalign.json`) 
     ]
   },
   "dictionary": {
-    "aid": "1191",
-    "ip": "db.corp.internal",
+    "aid": "APP-001",
+    "ip": "db.internal.domain",
     "database": "MAIN_DB",
     "systemTitle": "Main System",
     "columnDefaults": {
-      "stsrc": { "notes": "Status record data", "sample": "0.1" },
-      "created_by": { "notes": "Record creator identifier", "sample": "USR-001" }
+      "status": {
+        "notes": "Record status indicator",
+        "sample": "ACTIVE"
+      },
+      "created_by": {
+        "notes": "User ID who created the record",
+        "sample": "usr_123"
+      },
+      "created_at": {
+        "notes": "Timestamp when record was created",
+        "sample": "2026-01-01 00:00:00"
+      }
     }
   }
 }
