@@ -7,6 +7,9 @@ public class TableSchema
     public Dictionary<string, ColumnSchema> Columns { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<ForeignKeySchema> ForeignKeys { get; set; } = new();
     public string? Comment { get; set; }
+    public HashSet<string> Classes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool HasClass(string className) => Classes.Contains(className);
 
     public IEnumerable<string> PrimaryKeys =>
         Columns.Values.Where(c => c.IsPrimaryKey).Select(c => c.Name);

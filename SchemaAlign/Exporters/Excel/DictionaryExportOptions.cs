@@ -17,4 +17,6 @@ public class DictionaryExportOptions
     public string DatabaseName { get; set; } = DefaultDatabaseName;
     public string SystemTitle { get; set; } = DefaultSystemTitle;
     public string? ConfigPath { get; set; }
+    public HashSet<string> HighlightClasses { get; set; } = new(StringComparer.OrdinalIgnoreCase) { "newTbl", "updatedTbl" };
+    public string HighlightColor { get; set; } = "#ffcccc";
 }
