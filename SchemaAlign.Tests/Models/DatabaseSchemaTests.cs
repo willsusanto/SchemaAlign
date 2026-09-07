@@ -82,5 +82,17 @@ public class DatabaseSchemaTests
         orders.ForeignKeys.Should().HaveCount(1);
         orders.ForeignKeys[0].PrincipalTable.Should().Be("Users");
     }
+
+    [Fact]
+    public void TableSchema_Classes_ShouldSupportAddingAndCaseInsensitiveLookup()
+    {
+        var table = new TableSchema { Name = "TblAlpha" };
+        table.Classes.Add("newTbl");
+
+        table.HasClass("newTbl").Should().BeTrue();
+        table.HasClass("NEWTBL").Should().BeTrue();
+        table.HasClass("NewTbl").Should().BeTrue();
+        table.HasClass("updatedTbl").Should().BeFalse();
+    }
 }
 

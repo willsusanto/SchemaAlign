@@ -7,6 +7,15 @@ public class TableSchema
     public Dictionary<string, ColumnSchema> Columns { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<ForeignKeySchema> ForeignKeys { get; set; } = new();
     public string? Comment { get; set; }
+    /// <summary>
+    /// Classes assigned to the table (e.g. for diagram classification or export styling).
+    /// </summary>
+    public HashSet<string> Classes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Determines whether the table has the specified class assigned.
+    /// </summary>
+    public bool HasClass(string className) => Classes.Contains(className);
 
     public IEnumerable<string> PrimaryKeys =>
         Columns.Values.Where(c => c.IsPrimaryKey).Select(c => c.Name);
