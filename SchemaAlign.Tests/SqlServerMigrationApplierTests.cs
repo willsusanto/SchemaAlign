@@ -846,5 +846,268 @@ public class SqlServerMigrationApplierTests
         // Assert
         script.Should().Contain("REFERENCES [identity].[Users] ([UserId])");
     }
+
+    // ==================== Gap 1: SplitIntoBatches empty/whitespace/null ====================
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void SplitIntoBatches_EmptyOrWhitespaceInput_ReturnsEmptyCollection(string? input)
+    {
+        // Act
+        var batches = SqlServerMigrationGenerator.SplitIntoBatches(input!);
+
+        // Assert
+        batches.Should().BeEmpty();
+    }
+
+    // ==================== Gap 2: Empty diff (no tables) ====================
+
+    [Fact]
+    public void GenerateMigrationScript_EmptyDiff_GeneratesOnlyHeaderAndTransactionBlocks()
+    {
+        // Arrange
+        var diff = new SchemaDiff();
+        var options = new SqlServerApplierOptions
+        {
+            IncludeHeader = true,
+            Transactional = true
+        };
+
+        // Act
+        var script = _applier.GenerateMigrationScript(diff, options);
+
+        // Assert
+        script.Should().Contain("SchemaAlign SQL Server Migration Script");
+        script.Should().Contain("BEGIN TRANSACTION;");
+        script.Should().Contain("COMMIT TRANSACTION;");
+        script.Should().NotContain("CREATE TABLE");
+        script.Should().NotContain("ALTER TABLE");
+        script.Should().NotContain("DROP TABLE");
+    }
+
+    // ==================== Gap 3: ResolveTargetFilePath — empty path ====================
+
+    [Fact]
+    public async Task ApplyAsync_EmptyTargetDirectory_UsesDefaultScriptFileName()
+    {
+        // Arrange — use a temp dir as CWD so the default "migration.sql" lands somewhere known
+        var tempDir = Path.Combine(Path.GetTempPath(), "SchemaAlign_EmptyDir_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var diff = new SchemaDiff();
+            var table = new TableSchema { Name = "tbl_masked_empty_path" };
+            table.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+            diff.Tables.Add(new TableDiff { TableName = "tbl_masked_empty_path", Kind = DiffKind.Added, Target = table });
+
+            // Pass directory + explicit ScriptFileName to exercise the combine path
+            var options = new SqlServerApplierOptions
+            {
+                TargetDirectory = tempDir,
+                ScriptFileName = "custom_migration.sql"
+            };
+
+            // Act
+            var result = await _applier.ApplyAsync(diff, options);
+
+            // Assert
+            result.Success.Should().BeTrue();
+            var expectedPath = Path.Combine(tempDir, "custom_migration.sql");
+            result.CreatedFiles.Should().Contain(expectedPath);
+            File.Exists(expectedPath).Should().BeTrue();
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+        }
+    }
+
+    // ==================== Gap 4: ApplyAsync creates parent directories ====================
+
+    [Fact]
+    public async Task ApplyAsync_FileTarget_CreatesParentDirectoriesIfMissing()
+    {
+        // Arrange — nested path that does not exist
+        var tempBase = Path.Combine(Path.GetTempPath(), "SchemaAlign_AutoDir_" + Guid.NewGuid().ToString("N"));
+        var nestedDir = Path.Combine(tempBase, "sub1", "sub2");
+        var filePath = Path.Combine(nestedDir, "auto_created.sql");
+
+        try
+        {
+            Directory.Exists(nestedDir).Should().BeFalse("nested directory should not exist before test");
+
+            var diff = new SchemaDiff();
+            var table = new TableSchema { Name = "tbl_masked_autodir" };
+            table.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+            diff.Tables.Add(new TableDiff { TableName = "tbl_masked_autodir", Kind = DiffKind.Added, Target = table });
+
+            var options = new SqlServerApplierOptions
+            {
+                TargetDirectory = filePath
+            };
+
+            // Act
+            var result = await _applier.ApplyAsync(diff, options);
+
+            // Assert
+            result.Success.Should().BeTrue();
+            Directory.Exists(nestedDir).Should().BeTrue("parent directories should have been auto-created");
+            File.Exists(filePath).Should().BeTrue();
+            result.CreatedFiles.Should().Contain(filePath);
+        }
+        finally
+        {
+            if (Directory.Exists(tempBase)) Directory.Delete(tempBase, true);
+        }
+    }
+
+    // ==================== Gap 5: ApplyAsync existing file → ChangedFiles ====================
+
+    [Fact]
+    public async Task ApplyAsync_FileTarget_ExistingFile_AddsToChangedFiles()
+    {
+        // Arrange
+        var tempDir = Path.Combine(Path.GetTempPath(), "SchemaAlign_OverwriteTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var filePath = Path.Combine(tempDir, "migration.sql");
+            await File.WriteAllTextAsync(filePath, "-- Existing script\nSELECT 1;\n");
+
+            var diff = new SchemaDiff();
+            var table = new TableSchema { Name = "tbl_masked_overwrite" };
+            table.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+            diff.Tables.Add(new TableDiff { TableName = "tbl_masked_overwrite", Kind = DiffKind.Added, Target = table });
+
+            var options = new SqlServerApplierOptions
+            {
+                TargetDirectory = filePath
+            };
+
+            // Act
+            var result = await _applier.ApplyAsync(diff, options);
+
+            // Assert
+            result.Success.Should().BeTrue();
+            result.ChangedFiles.Should().Contain(filePath);
+            result.CreatedFiles.Should().NotContain(filePath);
+            var content = await File.ReadAllTextAsync(filePath);
+            content.Should().Contain("CREATE TABLE [dbo].[tbl_masked_overwrite]");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+        }
+    }
+
+    // ==================== Gap 6: Base ApplierOptions fallback ====================
+
+    [Fact]
+    public async Task PreviewAsync_BaseApplierOptions_NormalizesToSqlServerApplierOptions()
+    {
+        // Arrange
+        var tempDir = Path.Combine(Path.GetTempPath(), "SchemaAlign_BaseOptions_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var diff = new SchemaDiff();
+            var table = new TableSchema { Name = "tbl_masked_base_opts" };
+            table.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+            diff.Tables.Add(new TableDiff { TableName = "tbl_masked_base_opts", Kind = DiffKind.Added, Target = table });
+
+            // Pass base ApplierOptions, NOT SqlServerApplierOptions
+            var baseOptions = new ApplierOptions
+            {
+                TargetDirectory = tempDir,
+                AllowDrops = false,
+                DryRun = false
+            };
+
+            // Act
+            var previews = await _applier.PreviewAsync(diff, baseOptions);
+
+            // Assert
+            previews.Should().HaveCount(1);
+            previews[0].NewContent.Should().Contain("CREATE TABLE [dbo].[tbl_masked_base_opts]");
+            previews[0].DiffKind.Should().Be(DiffKind.Added);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+        }
+    }
+
+    // ==================== Gap 7: FK with null ConstraintName auto-generates name ====================
+
+    [Fact]
+    public void GenerateMigrationScript_ForeignKeyWithNullConstraintName_GeneratesDefaultName()
+    {
+        // Arrange
+        var table = new TableSchema { Name = "tbl_masked_orders", Schema = "dbo" };
+        table.AddColumn(new ColumnSchema { Name = "OrderId", Type = StandardType.Int, IsPrimaryKey = true });
+        table.AddColumn(new ColumnSchema { Name = "CustId", Type = StandardType.Int, IsNullable = false });
+        table.AddForeignKey(new ForeignKeySchema
+        {
+            ConstraintName = null, // Auto-generate
+            DependentTable = "tbl_masked_orders",
+            DependentColumn = "CustId",
+            PrincipalTable = "tbl_masked_customers",
+            PrincipalColumn = "Id"
+        });
+
+        var diff = new SchemaDiff();
+        diff.Tables.Add(new TableDiff
+        {
+            TableName = "tbl_masked_orders",
+            Schema = "dbo",
+            Kind = DiffKind.Added,
+            Target = table
+        });
+
+        // Act
+        var script = _applier.GenerateMigrationScript(diff);
+
+        // Assert — should use pattern FK_{table}_{principal}_{col}
+        script.Should().Contain("FK_tbl_masked_orders_tbl_masked_customers_CustId");
+        script.Should().Contain("ADD CONSTRAINT [FK_tbl_masked_orders_tbl_masked_customers_CustId]");
+        script.Should().Contain("FOREIGN KEY ([CustId]) REFERENCES [dbo].[tbl_masked_customers] ([Id])");
+    }
+
+    // ==================== Gap 8: DryRun with live DB connection string ====================
+
+    [Fact]
+    public async Task ApplyAsync_DryRun_WithConnectionString_DoesNotExecuteBatches()
+    {
+        // Arrange
+        var fakeExecutor = new FakeSqlMigrationExecutor();
+        var applierWithExecutor = new SqlServerMigrationApplier(fakeExecutor);
+
+        var diff = new SchemaDiff();
+        var table = new TableSchema { Name = "tbl_masked_dryrun_db" };
+        table.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+        diff.Tables.Add(new TableDiff { TableName = "tbl_masked_dryrun_db", Kind = DiffKind.Added, Target = table });
+
+        var options = new SqlServerApplierOptions
+        {
+            ConnectionString = "Server=sql_server_mock;Database=DryRunDb;Integrated Security=true;",
+            DryRun = true
+        };
+
+        // Act
+        var result = await applierWithExecutor.ApplyAsync(diff, options);
+
+        // Assert — DryRun should prevent any execution
+        result.Success.Should().BeTrue();
+        result.Previews.Should().NotBeEmpty("previews should still be generated in dry-run");
+        fakeExecutor.ExecutedBatches.Should().BeEmpty("no batches should be sent to executor in dry-run mode");
+        fakeExecutor.LastConnectionString.Should().BeNull("executor should never be called");
+        result.ChangedFiles.Should().BeEmpty();
+        result.CreatedFiles.Should().BeEmpty();
+    }
 }
 
