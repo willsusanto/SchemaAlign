@@ -219,6 +219,100 @@ public class SqlServerMigrationApplierTests
     }
 
     [Fact]
+    public void GenerateMigrationScript_AddNotNullColumnWithoutExplicitDefault_GeneratesDefaultConstraintToAvoidMsg4901()
+    {
+        // Arrange
+        var tableDiff = new TableDiff
+        {
+            TableName = "tbl_masked_existing",
+            Schema = "dbo",
+            Kind = DiffKind.Modified
+        };
+
+        var notNullStringCol = new ColumnSchema
+        {
+            Name = "ColMaskedStringReq",
+            Type = StandardType.String,
+            Length = 36,
+            IsNullable = false
+        };
+        var notNullIntCol = new ColumnSchema
+        {
+            Name = "ColMaskedIntReq",
+            Type = StandardType.Int,
+            IsNullable = false
+        };
+        var notNullBitCol = new ColumnSchema
+        {
+            Name = "ColMaskedBitReq",
+            Type = StandardType.Boolean,
+            IsNullable = false
+        };
+        var notNullDateCol = new ColumnSchema
+        {
+            Name = "ColMaskedDateReq",
+            Type = StandardType.DateTime,
+            IsNullable = false
+        };
+
+        tableDiff.Columns.Add(new ColumnDiff { ColumnName = "ColMaskedStringReq", Kind = DiffKind.Added, Target = notNullStringCol });
+        tableDiff.Columns.Add(new ColumnDiff { ColumnName = "ColMaskedIntReq", Kind = DiffKind.Added, Target = notNullIntCol });
+        tableDiff.Columns.Add(new ColumnDiff { ColumnName = "ColMaskedBitReq", Kind = DiffKind.Added, Target = notNullBitCol });
+        tableDiff.Columns.Add(new ColumnDiff { ColumnName = "ColMaskedDateReq", Kind = DiffKind.Added, Target = notNullDateCol });
+
+        var diff = new SchemaDiff();
+        diff.Tables.Add(tableDiff);
+
+        // Act
+        var script = _applier.GenerateMigrationScript(diff);
+
+        // Assert — must include a DEFAULT clause when adding a NOT NULL column to prevent SQL Server Msg 4901 on non-empty tables
+        script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedStringReq] NVARCHAR(36) NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedStringReq] DEFAULT ('');");
+        script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedIntReq] INT NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedIntReq] DEFAULT ((0));");
+        script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedBitReq] BIT NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedBitReq] DEFAULT ((0));");
+        script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedDateReq] DATETIME2 NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedDateReq] DEFAULT ('1900-01-01');");
+    }
+
+    [Fact]
+    public void GenerateMigrationScript_AddNotNullColumnWithExplicitDefault_UsesExplicitDefaultWithNamedConstraint()
+    {
+        // Arrange
+        var tableDiff = new TableDiff
+        {
+            TableName = "tbl_masked_existing",
+            Schema = "dbo",
+            Kind = DiffKind.Modified
+        };
+
+        var customDefCol = new ColumnSchema
+        {
+            Name = "ColMaskedCustomDef",
+            Type = StandardType.Int,
+            IsNullable = false,
+            DefaultValue = "((42))"
+        };
+        var guidCol = new ColumnSchema
+        {
+            Name = "ColMaskedGuidReq",
+            Type = StandardType.Guid,
+            IsNullable = false
+        };
+
+        tableDiff.Columns.Add(new ColumnDiff { ColumnName = "ColMaskedCustomDef", Kind = DiffKind.Added, Target = customDefCol });
+        tableDiff.Columns.Add(new ColumnDiff { ColumnName = "ColMaskedGuidReq", Kind = DiffKind.Added, Target = guidCol });
+
+        var diff = new SchemaDiff();
+        diff.Tables.Add(tableDiff);
+
+        // Act
+        var script = _applier.GenerateMigrationScript(diff);
+
+        // Assert
+        script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedCustomDef] INT NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedCustomDef] DEFAULT ((42));");
+        script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedGuidReq] UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedGuidReq] DEFAULT ('00000000-0000-0000-0000-000000000000');");
+    }
+
+    [Fact]
     public void GenerateMigrationScript_ForeignKeys_GeneratesGuardedAddAndDropConstraints()
     {
         // Arrange

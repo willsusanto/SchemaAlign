@@ -212,7 +212,7 @@ public static class SqlServerMigrationGenerator
                 var column = colDiff.Target;
                 if (column == null) continue;
 
-                var colDef = BuildColumnDefinition(column);
+                var colDef = BuildColumnDefinition(column, tableDiff.TableName);
                 sb.AppendLine($"IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[{schema}].[{tableDiff.TableName}]') AND name = N'{EscapeSql(column.Name)}')");
                 sb.AppendLine("BEGIN");
                 sb.AppendLine($"    ALTER TABLE [{schema}].[{tableDiff.TableName}] ADD {colDef};");
@@ -308,19 +308,71 @@ public static class SqlServerMigrationGenerator
         }
     }
 
-    private static string BuildColumnDefinition(ColumnSchema column)
+    private static string BuildColumnDefinition(ColumnSchema column, string? tableNameForConstraint = null)
     {
         var sqlType = TypeMapper.ToSqlServerType(column);
         var identity = column.IsIdentity ? " IDENTITY(1,1)" : "";
         var nullability = column.IsPrimaryKey ? " NOT NULL" : (column.IsNullable ? " NULL" : " NOT NULL");
 
         var defaultClause = "";
-        if (!string.IsNullOrWhiteSpace(column.DefaultValue) && !column.IsIdentity)
+        if (!column.IsIdentity)
         {
-            defaultClause = $" DEFAULT {column.DefaultValue}";
+            if (!string.IsNullOrWhiteSpace(column.DefaultValue))
+            {
+                var defVal = column.DefaultValue.Trim();
+                if (tableNameForConstraint != null)
+                {
+                    var constraintName = $"DF_{tableNameForConstraint}_{column.Name}";
+                    if (defVal.StartsWith("DEFAULT", StringComparison.OrdinalIgnoreCase))
+                    {
+                        defaultClause = $" CONSTRAINT [{constraintName}] {defVal}";
+                    }
+                    else
+                    {
+                        defaultClause = $" CONSTRAINT [{constraintName}] DEFAULT {defVal}";
+                    }
+                }
+                else
+                {
+                    if (defVal.StartsWith("DEFAULT", StringComparison.OrdinalIgnoreCase))
+                    {
+                        defaultClause = $" {defVal}";
+                    }
+                    else
+                    {
+                        defaultClause = $" DEFAULT {defVal}";
+                    }
+                }
+            }
+            else if (!column.IsNullable && !column.IsPrimaryKey && tableNameForConstraint != null)
+            {
+                // When adding a NOT NULL column to an existing table without an explicit default,
+                // SQL Server throws Msg 4901 on non-empty tables.
+                // We provide a type-appropriate fallback default constraint to ensure safe migrations.
+                var constraintName = $"DF_{tableNameForConstraint}_{column.Name}";
+                var fallbackDefault = GetDefaultValueForType(column);
+                defaultClause = $" CONSTRAINT [{constraintName}] DEFAULT {fallbackDefault}";
+            }
         }
 
         return $"[{column.Name}] {sqlType}{identity}{nullability}{defaultClause}".TrimEnd();
+    }
+
+    private static string GetDefaultValueForType(ColumnSchema column)
+    {
+        return column.Type switch
+        {
+            StandardType.Boolean => "((0))",
+            StandardType.Int or StandardType.BigInt or StandardType.SmallInt or StandardType.TinyInt => "((0))",
+            StandardType.Decimal or StandardType.Double or StandardType.Float => "((0))",
+            StandardType.Guid => "('00000000-0000-0000-0000-000000000000')",
+            StandardType.DateTime or StandardType.Date or StandardType.DateTimeOffset => "('1900-01-01')",
+            StandardType.Time => "('00:00:00')",
+            StandardType.ByteArray => "(0x)",
+            StandardType.Json => "('{}')",
+            StandardType.String => "('')",
+            _ => "('')"
+        };
     }
 
     private static string GetSchema(string? schema, SqlServerApplierOptions options)
