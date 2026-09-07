@@ -7,6 +7,10 @@ public class SqlServerSchemaReader : ISchemaReader
 {
     private readonly ISqlCatalogExecutor _executor;
 
+    public SqlServerSchemaReader() : this(new SqlCatalogExecutor())
+    {
+    }
+
     public SqlServerSchemaReader(ISqlCatalogExecutor? executor = null)
     {
         _executor = executor ?? new SqlCatalogExecutor();
