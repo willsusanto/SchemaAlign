@@ -180,17 +180,20 @@ public static class SqlServerMigrationGenerator
             sb.AppendLine("    );");
 
             // Extended properties for table
-            if (!string.IsNullOrWhiteSpace(table.Comment))
+            if (options.IncludeComments && !string.IsNullOrWhiteSpace(table.Comment))
             {
                 sb.AppendLine($"    EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'{EscapeSql(table.Comment)}', @level0type=N'SCHEMA', @level0name=N'{schema}', @level1type=N'TABLE', @level1name=N'{table.Name}';");
             }
 
             // Extended properties for columns
-            foreach (var column in table.Columns.Values)
+            if (options.IncludeComments)
             {
-                if (!string.IsNullOrWhiteSpace(column.Comment))
+                foreach (var column in table.Columns.Values)
                 {
-                    sb.AppendLine($"    EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'{EscapeSql(column.Comment)}', @level0type=N'SCHEMA', @level0name=N'{schema}', @level1type=N'TABLE', @level1name=N'{table.Name}', @level2type=N'COLUMN', @level2name=N'{column.Name}';");
+                    if (!string.IsNullOrWhiteSpace(column.Comment))
+                    {
+                        sb.AppendLine($"    EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'{EscapeSql(column.Comment)}', @level0type=N'SCHEMA', @level0name=N'{schema}', @level1type=N'TABLE', @level1name=N'{table.Name}', @level2type=N'COLUMN', @level2name=N'{column.Name}';");
+                    }
                 }
             }
 
@@ -217,7 +220,7 @@ public static class SqlServerMigrationGenerator
                 sb.AppendLine("BEGIN");
                 sb.AppendLine($"    ALTER TABLE [{schema}].[{tableDiff.TableName}] ADD {colDef};");
 
-                if (!string.IsNullOrWhiteSpace(column.Comment))
+                if (options.IncludeComments && !string.IsNullOrWhiteSpace(column.Comment))
                 {
                     sb.AppendLine($"    EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'{EscapeSql(column.Comment)}', @level0type=N'SCHEMA', @level0name=N'{schema}', @level1type=N'TABLE', @level1name=N'{tableDiff.TableName}', @level2type=N'COLUMN', @level2name=N'{column.Name}';");
                 }
@@ -252,7 +255,7 @@ public static class SqlServerMigrationGenerator
                     sb.AppendLine();
                 }
 
-                if (!string.IsNullOrWhiteSpace(column.Comment))
+                if (options.IncludeComments && !string.IsNullOrWhiteSpace(column.Comment))
                 {
                     sb.AppendLine($"IF EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'{schema}', N'TABLE', N'{tableDiff.TableName}', N'COLUMN', N'{column.Name}'))");
                     sb.AppendLine($"    EXEC sys.sp_updateextendedproperty @name=N'MS_Description', @value=N'{EscapeSql(column.Comment)}', @level0type=N'SCHEMA', @level0name=N'{schema}', @level1type=N'TABLE', @level1name=N'{tableDiff.TableName}', @level2type=N'COLUMN', @level2name=N'{column.Name}';");

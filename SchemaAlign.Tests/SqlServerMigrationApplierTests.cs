@@ -131,9 +131,7 @@ public class SqlServerMigrationApplierTests
         script.Should().Contain("[ColGuid] UNIQUEIDENTIFIER NOT NULL");
         script.Should().Contain("[ColBinary] VARBINARY(MAX) NULL");
         script.Should().Contain("CONSTRAINT [PK_tbl_masked_sample] PRIMARY KEY CLUSTERED ([ColId])");
-        script.Should().Contain("sp_addextendedproperty");
-        script.Should().Contain("@value=N'Sample table description'");
-        script.Should().Contain("@value=N'Primary key'");
+        script.Should().NotContain("sp_addextendedproperty");
     }
 
     [Fact]
@@ -214,8 +212,7 @@ public class SqlServerMigrationApplierTests
         script.Should().Contain("IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[tbl_masked_entity]') AND name = N'ColNew')");
         script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_entity] ADD [ColNew] NVARCHAR(80) NULL;");
         script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_entity] ALTER COLUMN [ColMod] BIGINT NOT NULL;");
-        script.Should().Contain("sp_addextendedproperty");
-        script.Should().Contain("@value=N'New field comment'");
+        script.Should().NotContain("sp_addextendedproperty");
     }
 
     [Fact]
@@ -668,7 +665,7 @@ public class SqlServerMigrationApplierTests
     }
 
     [Fact]
-    public void GenerateMigrationScript_ModifiedColumnComment_GeneratesExtendedPropertyUpsert()
+    public void GenerateMigrationScript_ModifiedColumnComment_WhenIncludeCommentsTrue_GeneratesExtendedPropertyUpsert()
     {
         // Arrange
         var tableDiff = new TableDiff
@@ -692,13 +689,20 @@ public class SqlServerMigrationApplierTests
         var diff = new SchemaDiff();
         diff.Tables.Add(tableDiff);
 
+        var options = new SqlServerApplierOptions { IncludeComments = true };
+
         // Act
-        var script = _applier.GenerateMigrationScript(diff);
+        var script = _applier.GenerateMigrationScript(diff, options);
+        var scriptDefault = _applier.GenerateMigrationScript(diff);
 
         // Assert
         script.Should().Contain("IF EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'dbo', N'TABLE', N'tbl_masked_docs', N'COLUMN', N'Notes'))");
         script.Should().Contain("EXEC sys.sp_updateextendedproperty @name=N'MS_Description', @value=N'Updated field comment'");
         script.Should().Contain("EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Updated field comment'");
+
+        // By default, comments are disabled
+        scriptDefault.Should().NotContain("sp_updateextendedproperty");
+        scriptDefault.Should().NotContain("sp_addextendedproperty");
     }
 
     [Fact]
@@ -853,7 +857,8 @@ public class SqlServerMigrationApplierTests
 
         var options = new SqlServerApplierOptions
         {
-            DefaultSchema = "inventory"
+            DefaultSchema = "inventory",
+            IncludeComments = true
         };
 
         // Act
@@ -867,7 +872,7 @@ public class SqlServerMigrationApplierTests
     }
 
     [Fact]
-    public void GenerateMigrationScript_ModifiedColumnExtendedPropertyOnly_DoesNotEmitAlterColumn()
+    public void GenerateMigrationScript_ModifiedColumnExtendedPropertyOnly_WhenIncludeCommentsTrue_DoesNotEmitAlterColumn()
     {
         // Arrange
         var tableDiff = new TableDiff
@@ -891,8 +896,10 @@ public class SqlServerMigrationApplierTests
         var diff = new SchemaDiff();
         diff.Tables.Add(tableDiff);
 
+        var options = new SqlServerApplierOptions { IncludeComments = true };
+
         // Act
-        var script = _applier.GenerateMigrationScript(diff);
+        var script = _applier.GenerateMigrationScript(diff, options);
 
         // Assert
         script.Should().NotContain("ALTER COLUMN");

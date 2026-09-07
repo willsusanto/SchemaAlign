@@ -31,6 +31,11 @@ public class SqlServerApplierOptions : ApplierOptions
     public bool Idempotent { get; set; } = true;
 
     /// <summary>
+    /// Whether to generate extended property comments (sys.sp_addextendedproperty / sys.sp_updateextendedproperty). Default is false.
+    /// </summary>
+    public bool IncludeComments { get; set; } = false;
+
+    /// <summary>
     /// Default schema name when not specified (defaults to "dbo").
     /// </summary>
     public string DefaultSchema { get; set; } = "dbo";
