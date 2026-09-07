@@ -1,5 +1,6 @@
 using SchemaAlign.Appliers;
 using SchemaAlign.Cli.Commands;
+using SchemaAlign.Cli.Rendering;
 using SchemaAlign.Cli.Services;
 using SchemaAlign.Diff;
 using SchemaAlign.Models;
@@ -153,5 +154,52 @@ public class SyncWorkflowTests
                 try { Directory.Delete(tempDir, true); } catch { }
             }
         }
+    }
+
+    [Fact]
+    public void RenderPreviews_NullOriginalContent_RendersCleanContentWithoutLeadingPlusSigns()
+    {
+        var console = new TestConsole();
+        var previews = new List<FileDiffPreview>
+        {
+            new()
+            {
+                FilePath = "[SQL Server Live DB] LibraryDB",
+                DiffKind = DiffKind.Modified,
+                OriginalContent = null,
+                NewContent = "CREATE TABLE [dbo].[Books] (\n    [Id] INT NOT NULL\n);",
+                UnifiedDiff = "@@ -0,0 +1,3 @@\n+CREATE TABLE [dbo].[Books] (\n+    [Id] INT NOT NULL\n+);"
+            }
+        };
+
+        PreviewConsoleRenderer.RenderPreviews(previews, console);
+
+        var output = console.Output;
+        output.Should().Contain("CREATE TABLE [dbo].[Books]");
+        output.Should().NotContain("+CREATE TABLE");
+        output.Should().NotContain("+    [Id]");
+    }
+
+    [Fact]
+    public void RenderPreviews_WithOriginalContent_RendersUnifiedDiffWithPlusAndMinus()
+    {
+        var console = new TestConsole();
+        var previews = new List<FileDiffPreview>
+        {
+            new()
+            {
+                FilePath = "migration.sql",
+                DiffKind = DiffKind.Modified,
+                OriginalContent = "CREATE TABLE [dbo].[Books] ( [Id] INT );",
+                NewContent = "CREATE TABLE [dbo].[Books] ( [Id] INT, [Title] NVARCHAR(100) );",
+                UnifiedDiff = "--- migration.sql\n+++ migration.sql\n@@ -1 +1 @@\n-CREATE TABLE [dbo].[Books] ( [Id] INT );\n+CREATE TABLE [dbo].[Books] ( [Id] INT, [Title] NVARCHAR(100) );"
+            }
+        };
+
+        PreviewConsoleRenderer.RenderPreviews(previews, console);
+
+        var output = console.Output;
+        output.Should().Contain("-CREATE TABLE");
+        output.Should().Contain("+CREATE TABLE");
     }
 }

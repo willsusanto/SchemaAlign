@@ -34,9 +34,26 @@ public static class PreviewConsoleRenderer
 
             var header = $"[{headerColor}]{preview.DiffKind}: {Markup.Escape(preview.FilePath)}[/]";
 
-            if (string.IsNullOrWhiteSpace(preview.UnifiedDiff))
+            if (string.IsNullOrWhiteSpace(preview.UnifiedDiff) && string.IsNullOrWhiteSpace(preview.NewContent))
             {
                 console.Write(new Panel("[grey](No textual diff available)[/]")
+                {
+                    Header = new PanelHeader(header),
+                    Border = BoxBorder.Rounded
+                });
+                continue;
+            }
+
+            if (preview.OriginalContent == null && !string.IsNullOrWhiteSpace(preview.NewContent))
+            {
+                var contentLines = preview.NewContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                var contentSb = new System.Text.StringBuilder();
+                foreach (var line in contentLines)
+                {
+                    contentSb.AppendLine($"[green]{Markup.Escape(line)}[/]");
+                }
+
+                console.Write(new Panel(contentSb.ToString().TrimEnd())
                 {
                     Header = new PanelHeader(header),
                     Border = BoxBorder.Rounded
