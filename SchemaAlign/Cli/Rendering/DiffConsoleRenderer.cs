@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using SchemaAlign.Appliers;
 using SchemaAlign.Diff;
 using Spectre.Console;
 
@@ -16,7 +17,9 @@ public static class DiffConsoleRenderer
     /// <param name="diff">The schema diff to render.</param>
     /// <param name="console">The AnsiConsole instance.</param>
     /// <param name="detailed">Whether to render the detailed change tree.</param>
-    public static void RenderConsole(SchemaDiff diff, IAnsiConsole console, bool detailed = false)
+    /// <param name="maxTables">Maximum number of tables to display in the console before truncating.</param>
+    /// <param name="reportPath">Optional path to the exported markdown report for truncation notice.</param>
+    public static void RenderConsole(SchemaDiff diff, IAnsiConsole console, bool detailed = false, int maxTables = 15, string? reportPath = null)
     {
         if (!diff.HasChanges)
         {
@@ -47,6 +50,11 @@ public static class DiffConsoleRenderer
         });
 
         // 2. Summary Table
+        var changedTables = diff.Tables.Where(x => x.HasChanges).ToList();
+        var displayTables = maxTables > 0 && changedTables.Count > maxTables
+            ? changedTables.Take(maxTables).ToList()
+            : changedTables;
+
         var table = new Table().Border(TableBorder.Rounded);
         table.AddColumn("[bold]Status[/]");
         table.AddColumn("[bold]Table[/]");
@@ -54,7 +62,7 @@ public static class DiffConsoleRenderer
         table.AddColumn("[bold]Columns[/]");
         table.AddColumn("[bold]Foreign Keys[/]");
 
-        foreach (var t in diff.Tables.Where(x => x.HasChanges))
+        foreach (var t in displayTables)
         {
             var status = t.Kind switch
             {
@@ -85,13 +93,22 @@ public static class DiffConsoleRenderer
 
         console.Write(table);
 
+        if (changedTables.Count > displayTables.Count)
+        {
+            var remaining = changedTables.Count - displayTables.Count;
+            var reportNotice = !string.IsNullOrWhiteSpace(reportPath)
+                ? $" [blue]Full details in:[/] [underline]{Markup.Escape(reportPath)}[/]"
+                : " (Specify --report to export full details)";
+            console.MarkupLine($"[grey]... and {remaining} more changed tables ({changedTables.Count} total).[/]{reportNotice}");
+        }
+
         // Legend
         console.MarkupLine("[grey]Legend:[/] [green]+ Added[/] (in target, missing in source) | [yellow]~ Modified[/] (attribute/type differs) | [red]- Deleted[/] (in source, missing in target)");
 
         // 3. Detailed Tree View
         if (detailed)
         {
-            RenderDetailedTree(diff, console);
+            RenderDetailedTree(diff, console, maxTables, reportPath);
         }
     }
 
@@ -100,11 +117,17 @@ public static class DiffConsoleRenderer
     /// </summary>
     /// <param name="diff">The schema diff to render.</param>
     /// <param name="console">The AnsiConsole instance.</param>
-    public static void RenderDetailedTree(SchemaDiff diff, IAnsiConsole console)
+    /// <param name="maxTables">Maximum number of tables to include before truncating.</param>
+    /// <param name="reportPath">Optional path to the exported markdown report for truncation notice.</param>
+    public static void RenderDetailedTree(SchemaDiff diff, IAnsiConsole console, int maxTables = 15, string? reportPath = null)
     {
         var root = new Tree("[bold underline]Detailed Changes[/] [grey]([green]+ Added[/] | [yellow]~ Modified[/] | [red]- Deleted[/])[/]");
+        var changedTables = diff.Tables.Where(x => x.HasChanges).ToList();
+        var displayTables = maxTables > 0 && changedTables.Count > maxTables
+            ? changedTables.Take(maxTables).ToList()
+            : changedTables;
 
-        foreach (var t in diff.Tables.Where(x => x.HasChanges))
+        foreach (var t in displayTables)
         {
             var tableNode = t.Kind switch
             {
@@ -158,18 +181,29 @@ public static class DiffConsoleRenderer
             }
         }
 
+        if (changedTables.Count > displayTables.Count)
+        {
+            var remaining = changedTables.Count - displayTables.Count;
+            var reportNotice = !string.IsNullOrWhiteSpace(reportPath)
+                ? $" Full details in {reportPath}."
+                : "";
+            root.AddNode($"[grey]... and {remaining} more tables.{reportNotice}[/]");
+        }
+
         console.Write(root);
     }
 
     /// <summary>
-    /// Renders the schema diff summary formatted as Markdown.
+    /// Renders a comprehensive schema diff and alignment summary formatted as Markdown.
     /// </summary>
     /// <param name="diff">The schema diff to render.</param>
+    /// <param name="previews">Optional file diff previews to embed in the markdown report.</param>
+    /// <param name="title">Optional custom document title.</param>
     /// <returns>A markdown formatted string.</returns>
-    public static string RenderMarkdown(SchemaDiff diff)
+    public static string RenderMarkdown(SchemaDiff diff, IReadOnlyList<FileDiffPreview>? previews = null, string? title = null)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("# Schema Diff Summary");
+        sb.AppendLine($"# {title ?? "Schema Diff Summary"}");
         sb.AppendLine();
         sb.AppendLine($"- **HasChanges**: `{diff.HasChanges}`");
         sb.AppendLine($"- **Added Tables**: {diff.AddedTables.Count()}");
@@ -177,12 +211,89 @@ public static class DiffConsoleRenderer
         sb.AppendLine($"- **Deleted Tables**: {diff.DeletedTables.Count()}");
         sb.AppendLine();
 
-        sb.AppendLine("| Status | Table | Schema | Added Cols | Mod Cols | Del Cols |");
-        sb.AppendLine("|---|---|---|---|---|---|");
+        sb.AppendLine("## Overview");
+        sb.AppendLine();
+        sb.AppendLine("| Status | Table | Schema | Added Cols | Mod Cols | Del Cols | Added FKs | Mod FKs | Del FKs |");
+        sb.AppendLine("|---|---|---|---|---|---|---|---|---|");
 
         foreach (var t in diff.Tables.Where(x => x.HasChanges))
         {
-            sb.AppendLine($"| {t.Kind} | `{t.TableName}` | `{t.Schema}` | {t.AddedColumns.Count()} | {t.ModifiedColumns.Count()} | {t.DeletedColumns.Count()} |");
+            sb.AppendLine($"| {t.Kind} | `{t.TableName}` | `{t.Schema}` | {t.AddedColumns.Count()} | {t.ModifiedColumns.Count()} | {t.DeletedColumns.Count()} | {t.AddedForeignKeys.Count()} | {t.ModifiedForeignKeys.Count()} | {t.DeletedForeignKeys.Count()} |");
+        }
+
+        var changedTables = diff.Tables.Where(x => x.HasChanges).ToList();
+        if (changedTables.Any(t => t.Columns.Any(c => c.Kind != DiffKind.Unchanged) || t.ForeignKeys.Any(f => f.Kind != DiffKind.Unchanged)))
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Detailed Changes");
+
+            foreach (var t in changedTables)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"### `{t.TableName}` ({t.Kind})");
+
+                if (t.Columns.Any(c => c.Kind != DiffKind.Unchanged))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("**Columns:**");
+                    foreach (var c in t.Columns.Where(c => c.Kind != DiffKind.Unchanged))
+                    {
+                        switch (c.Kind)
+                        {
+                            case DiffKind.Added:
+                                var addType = c.Target != null ? $"{c.Target.Type}{(c.Target.Length.HasValue ? $"({c.Target.Length})" : "")}{(c.Target.IsNullable ? "?" : "")}" : "";
+                                sb.AppendLine($"- **+ ADD** `{c.ColumnName}` ({addType})");
+                                break;
+                            case DiffKind.Deleted:
+                                sb.AppendLine($"- **- DROP** `{c.ColumnName}` (DESTRUCTIVE)");
+                                break;
+                            case DiffKind.Modified:
+                                var srcType = c.Source != null ? $"{c.Source.Type}{(c.Source.Length.HasValue ? $"({c.Source.Length})" : "")}{(c.Source.IsNullable ? "?" : "")}" : "";
+                                var tgtType = c.Target != null ? $"{c.Target.Type}{(c.Target.Length.HasValue ? $"({c.Target.Length})" : "")}{(c.Target.IsNullable ? "?" : "")}" : "";
+                                sb.AppendLine($"- **~ MODIFY** `{c.ColumnName}`: `{srcType}` -> `{tgtType}` ({c.Changes})");
+                                break;
+                        }
+                    }
+                }
+
+                if (t.ForeignKeys.Any(f => f.Kind != DiffKind.Unchanged))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("**Foreign Keys:**");
+                    foreach (var f in t.ForeignKeys.Where(f => f.Kind != DiffKind.Unchanged))
+                    {
+                        var fkName = f.ConstraintName ?? "(unnamed)";
+                        switch (f.Kind)
+                        {
+                            case DiffKind.Added:
+                                var addRef = f.Target != null ? $"{f.Target.DependentTable}.{f.Target.DependentColumn} -> {f.Target.PrincipalTable}.{f.Target.PrincipalColumn}" : "";
+                                sb.AppendLine($"- **+ ADD FK** `{fkName}` ({addRef})");
+                                break;
+                            case DiffKind.Deleted:
+                                sb.AppendLine($"- **- DROP FK** `{fkName}` (DESTRUCTIVE)");
+                                break;
+                            case DiffKind.Modified:
+                                sb.AppendLine($"- **~ MODIFY FK** `{fkName}` (Cardinality/Target modified)");
+                                break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (previews != null && previews.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## File Previews");
+            foreach (var p in previews)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"### {p.DiffKind}: `{p.FilePath}`");
+                sb.AppendLine();
+                sb.AppendLine("```diff");
+                sb.AppendLine(p.UnifiedDiff ?? "(No textual diff)");
+                sb.AppendLine("```");
+            }
         }
 
         return sb.ToString();

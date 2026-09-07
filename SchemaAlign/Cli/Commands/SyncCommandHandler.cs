@@ -67,6 +67,7 @@ public class SyncCommandOptions
     public string? Namespace { get; set; }
 
     /// <summary>
+    /// <summary>
     /// Optional path to .schemaalign.json configuration file.
     /// </summary>
     public string? ConfigFile { get; set; }
@@ -110,6 +111,11 @@ public class SyncCommandOptions
     /// Table prefixes to strip when matching foreign key columns and generating navigation properties (e.g. "ms", "lt", "tr").
     /// </summary>
     public List<string> TablePrefixes { get; set; } = new();
+
+    /// <summary>
+    /// Path to export a markdown sync report to.
+    /// </summary>
+    public string? ReportPath { get; set; }
 }
 
 /// <summary>
@@ -250,8 +256,14 @@ public class SyncCommandHandler
             return 0;
         }
 
+        var reportPath = options.ReportPath;
+        if (string.IsNullOrWhiteSpace(reportPath) && diff.HasChanges && (diff.Tables.Count(t => t.HasChanges) > 15 || isSnapshot))
+        {
+            reportPath = Path.Combine(".schemaalign", "sync_report.md");
+        }
+
         // Print initial diff table
-        DiffConsoleRenderer.RenderConsole(diff, _console, detailed: false);
+        DiffConsoleRenderer.RenderConsole(diff, _console, detailed: false, maxTables: 15, reportPath: reportPath);
 
         var hasDestructive = DiffFilter.HasDestructiveChanges(diff);
         if (hasDestructive)
@@ -359,7 +371,25 @@ public class SyncCommandHandler
 
         // Preview
         var previews = await applier.PreviewAsync(diff, applierOptions, cancellationToken);
-        PreviewConsoleRenderer.RenderPreviews(previews, _console);
+
+        if (!string.IsNullOrWhiteSpace(reportPath))
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(reportPath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+                File.WriteAllText(reportPath, DiffConsoleRenderer.RenderMarkdown(diff, previews, title: $"Schema Sync Report: {options.Current} -> {options.Target}"));
+            }
+            catch (Exception ex)
+            {
+                _console.MarkupLine($"[yellow]Warning: Could not write report to '{reportPath}': {Markup.Escape(ex.Message)}[/]");
+            }
+        }
+
+        PreviewConsoleRenderer.RenderPreviews(previews, _console, maxDetailedPanels: 3, reportPath: reportPath);
 
         if (options.DryRun)
         {

@@ -47,6 +47,11 @@ public class DiffCommandOptions
     /// Table prefixes to strip when matching foreign key columns (e.g. "ms", "lt", "tr").
     /// </summary>
     public List<string> TablePrefixes { get; set; } = new();
+
+    /// <summary>
+    /// Path to export a markdown diff report to.
+    /// </summary>
+    public string? ReportPath { get; set; }
 }
 
 /// <summary>
@@ -143,6 +148,30 @@ public class DiffCommandHandler
         // Diff is calculated from source (current base) to target (desired state)
         var diff = SchemaDiffCalculator.Calculate(sourceSchema, targetSchema, diffOptions);
 
+        var reportPath = options.ReportPath;
+        if (string.IsNullOrWhiteSpace(reportPath) && diff.HasChanges && diff.Tables.Count(t => t.HasChanges) > 15)
+        {
+            reportPath = Path.Combine(".schemaalign", "diff_report.md");
+        }
+
+        if (!string.IsNullOrWhiteSpace(reportPath) && diff.HasChanges)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(reportPath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+                File.WriteAllText(reportPath, DiffConsoleRenderer.RenderMarkdown(diff, title: $"Schema Diff: {options.Current} -> {options.Target}"));
+                _console.MarkupLine($"[green]✔ Full markdown report written to:[/] [underline]{Markup.Escape(reportPath)}[/]\n");
+            }
+            catch (Exception ex)
+            {
+                _console.MarkupLine($"[yellow]Warning: Could not write report to '{reportPath}': {Markup.Escape(ex.Message)}[/]");
+            }
+        }
+
         switch (options.Output.ToLowerInvariant())
         {
             case "json":
@@ -154,7 +183,7 @@ public class DiffCommandHandler
                 break;
             case "console":
             default:
-                DiffConsoleRenderer.RenderConsole(diff, _console, options.Detailed);
+                DiffConsoleRenderer.RenderConsole(diff, _console, options.Detailed, maxTables: 15, reportPath: reportPath);
                 break;
         }
 

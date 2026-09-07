@@ -68,6 +68,13 @@ public static class CommandLineConfiguration
         };
         diffTablePrefixOpt.Aliases.Add("--table-prefixes");
 
+        var diffReportOpt = new Option<string?>("--report")
+        {
+            Description = "File path to write a detailed markdown report"
+        };
+        diffReportOpt.Aliases.Add("-r");
+        diffReportOpt.Aliases.Add("--report-file");
+
         var diffCommand = new Command("diff", "Compare current schema against desired target schema non-destructively")
         {
             diffCurrentOpt,
@@ -76,7 +83,8 @@ public static class CommandLineConfiguration
             diffOutputOpt,
             diffDetailedOpt,
             diffConfigOpt,
-            diffTablePrefixOpt
+            diffTablePrefixOpt,
+            diffReportOpt
         };
 
         diffCommand.SetAction(async parseResult =>
@@ -90,7 +98,8 @@ public static class CommandLineConfiguration
                 Output = parseResult.GetValue(diffOutputOpt) ?? "console",
                 Detailed = parseResult.GetValue(diffDetailedOpt),
                 ConfigFile = parseResult.GetValue(diffConfigOpt),
-                TablePrefixes = (parseResult.GetValue(diffTablePrefixOpt) ?? Array.Empty<string>()).ToList()
+                TablePrefixes = (parseResult.GetValue(diffTablePrefixOpt) ?? Array.Empty<string>()).ToList(),
+                ReportPath = parseResult.GetValue(diffReportOpt)
             };
             return await handler.RunAsync(options);
         });
@@ -110,10 +119,10 @@ public static class CommandLineConfiguration
 
         var syncOutputFileOpt = new Option<string?>("--output-file")
         {
-            Description = "Optional path to export generated .sql migration script to file without applying directly to live database",
-            DefaultValueFactory = _ => null
+            Description = "Path to write the generated SQL Server migration script (e.g. ./migrations/migration.sql)"
         };
         syncOutputFileOpt.Aliases.Add("-o");
+        syncOutputFileOpt.Aliases.Add("--script-out");
 
         var syncModeOpt = new Option<string>("--mode")
         {
@@ -193,6 +202,13 @@ public static class CommandLineConfiguration
         };
         syncTablePrefixOpt.Aliases.Add("--table-prefixes");
 
+        var syncReportOpt = new Option<string?>("--report")
+        {
+            Description = "File path to write a detailed markdown report"
+        };
+        syncReportOpt.Aliases.Add("-r");
+        syncReportOpt.Aliases.Add("--report-file");
+
         var syncCommand = new Command("sync", "Synchronize current schema to match desired target schema")
         {
             syncCurrentOpt,
@@ -210,7 +226,8 @@ public static class CommandLineConfiguration
             syncUsingOpt,
             syncClassAttrOpt,
             syncFkPlacementOpt,
-            syncTablePrefixOpt
+            syncTablePrefixOpt,
+            syncReportOpt
         };
 
         syncCommand.SetAction(async parseResult =>
@@ -242,7 +259,8 @@ public static class CommandLineConfiguration
                 Usings = usings,
                 ClassAttributes = classAttrs,
                 ForeignKeyPlacement = parseResult.GetValue(syncFkPlacementOpt),
-                TablePrefixes = tablePrefixes
+                TablePrefixes = tablePrefixes,
+                ReportPath = parseResult.GetValue(syncReportOpt)
             };
             return await handler.RunAsync(options);
         });

@@ -13,11 +13,51 @@ public static class PreviewConsoleRenderer
     /// </summary>
     /// <param name="previews">Collection of file diff previews.</param>
     /// <param name="console">The AnsiConsole instance.</param>
-    public static void RenderPreviews(IReadOnlyList<FileDiffPreview> previews, IAnsiConsole console)
+    /// <param name="maxDetailedPanels">Maximum number of full diff panels to render before switching to compact summary table.</param>
+    /// <param name="reportPath">Optional path to the exported markdown report for reference.</param>
+    public static void RenderPreviews(IReadOnlyList<FileDiffPreview> previews, IAnsiConsole console, int maxDetailedPanels = 3, string? reportPath = null)
     {
         if (previews.Count == 0)
         {
             console.MarkupLine("[yellow]No file changes to preview.[/]");
+            return;
+        }
+
+        if (previews.Count > maxDetailedPanels)
+        {
+            console.MarkupLine($"[bold blue]File Preview Summary ({previews.Count} files):[/]\n");
+            var table = new Table().Border(TableBorder.Rounded);
+            table.AddColumn("[bold]Status[/]");
+            table.AddColumn("[bold]File Path[/]");
+            table.AddColumn("[bold]Line Changes[/]");
+
+            foreach (var preview in previews)
+            {
+                var statusMarkup = preview.DiffKind switch
+                {
+                    Diff.DiffKind.Added => "[green]+ Added[/]",
+                    Diff.DiffKind.Deleted => "[red]- Deleted[/]",
+                    _ => "[yellow]~ Modified[/]"
+                };
+
+                var lines = (preview.UnifiedDiff ?? string.Empty).Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                var added = lines.Count(l => l.StartsWith("+") && !l.StartsWith("+++"));
+                var deleted = lines.Count(l => l.StartsWith("-") && !l.StartsWith("---"));
+                var stats = $"[green]+{added}[/] / [red]-{deleted}[/]";
+
+                table.AddRow(statusMarkup, Markup.Escape(preview.FilePath), stats);
+            }
+
+            console.Write(table);
+
+            if (!string.IsNullOrWhiteSpace(reportPath))
+            {
+                console.MarkupLine($"\n[bold blue]Full unified diffs written to:[/] [underline]{Markup.Escape(reportPath)}[/]");
+            }
+            else
+            {
+                console.MarkupLine("\n[grey]Tip: Specify --report to export full unified diffs to a file.[/]");
+            }
             return;
         }
 
@@ -91,7 +131,8 @@ public static class PreviewConsoleRenderer
             console.Write(new Panel(sb.ToString().TrimEnd())
             {
                 Header = new PanelHeader(header),
-                Border = BoxBorder.Rounded
+                Border = BoxBorder.Rounded,
+                Expand = true
             });
         }
     }

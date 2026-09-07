@@ -451,4 +451,66 @@ public class SyncWorkflowTests
             }
         }
     }
+
+    [Fact]
+    public async Task ExecuteSync_WithReportPath_GeneratesMarkdownReportAndTruncatesConsoleOutput()
+    {
+        var console = new TestConsole();
+        console.Profile.Width = 240;
+        var mockApplier = new MockApplier();
+        var registry = new ApplierRegistry();
+        registry.Register(TargetType.CSharp, mockApplier);
+
+        var sourceSchema = new DatabaseSchema();
+        var targetSchema = new DatabaseSchema();
+
+        for (var i = 1; i <= 20; i++)
+        {
+            var t = new TableSchema { Name = $"AlphaTable_{i:D2}" };
+            t.AddColumn(new ColumnSchema { Name = "ColA", Type = StandardType.Int });
+            targetSchema.AddTable(t);
+        }
+
+        var reportTempPath = Path.Combine(Path.GetTempPath(), $"sync_report_test_{Guid.NewGuid():N}.md");
+
+        try
+        {
+            var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
+            var options = new SyncCommandOptions
+            {
+                Current = "Entities",
+                Target = "schema.mmd",
+                Mode = "snapshot",
+                ReportPath = reportTempPath,
+                DryRun = true,
+                Yes = true,
+                Interactive = false
+            };
+
+            var exitCode = await handler.ExecuteAsync(sourceSchema, targetSchema, options, TargetType.CSharp);
+
+            exitCode.Should().Be(0);
+            File.Exists(reportTempPath).Should().BeTrue();
+
+            var markdownContent = await File.ReadAllTextAsync(reportTempPath);
+            markdownContent.Should().Contain("# Schema Sync Report");
+            markdownContent.Should().Contain("AlphaTable_01");
+            markdownContent.Should().Contain("AlphaTable_20");
+            markdownContent.Should().Contain("## File Previews");
+
+            // Console output should be truncated to top 15 tables
+            console.Output.Should().Contain("AlphaTable_01");
+            console.Output.Should().Contain("AlphaTable_15");
+            console.Output.Should().NotContain("AlphaTable_16");
+            console.Output.Should().Contain("5 more changed tables");
+            console.Output.Should().Contain(reportTempPath);
+        }
+        finally
+        {
+            if (File.Exists(reportTempPath))
+            {
+                File.Delete(reportTempPath);
+            }
+        }
+    }
 }
