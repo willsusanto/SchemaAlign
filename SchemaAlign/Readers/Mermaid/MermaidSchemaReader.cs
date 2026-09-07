@@ -7,7 +7,7 @@ namespace SchemaAlign.Readers.Mermaid;
 /// <summary>
 /// Reads database schemas from Mermaid ER diagrams (erDiagram syntax).
 /// Supports entity definitions, column attributes, data types, nullability (via '?' suffix or 'NULL'/'nullable' comments),
-/// dimensions (length, precision, scale), PK/FK markers, and relationship cardinality.
+/// dimensions (length, precision, scale), PK/FK markers, relationship cardinality, and table classification (class statements and inline :::class notation).
 /// </summary>
 public class MermaidSchemaReader : ISchemaReader
 {
