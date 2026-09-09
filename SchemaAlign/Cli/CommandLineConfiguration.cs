@@ -27,15 +27,12 @@ public static class CommandLineConfiguration
         var rootCommand = new RootCommand("SchemaAlign - Universal Database & Entity Schema Alignment Tool");
 
         // --- diff command ---
-        var diffSourceOpt = new Option<string>("--source")
+        var diffCurrentOpt = new Option<string>("--current")
         {
-            Description = "Path to current/base schema (e.g. ./src/Entities or current database)",
+            Description = "Path to current/base schema (e.g. ./src/Entities or current database connection string)",
             Required = true
         };
-        diffSourceOpt.Aliases.Add("-s");
-        diffSourceOpt.Aliases.Add("--from");
-        diffSourceOpt.Aliases.Add("--current");
-        diffSourceOpt.Aliases.Add("--base");
+        diffCurrentOpt.Aliases.Add("-c");
 
         var diffTargetOpt = new Option<string>("--target")
         {
@@ -43,8 +40,6 @@ public static class CommandLineConfiguration
             Required = true
         };
         diffTargetOpt.Aliases.Add("-t");
-        diffTargetOpt.Aliases.Add("--to");
-        diffTargetOpt.Aliases.Add("--desired");
 
         var diffModeOpt = new Option<string>("--mode")
         {
@@ -66,9 +61,9 @@ public static class CommandLineConfiguration
             DefaultValueFactory = _ => false
         };
 
-        var diffCommand = new Command("diff", "Compare current base schema against desired target schema non-destructively")
+        var diffCommand = new Command("diff", "Compare current schema against desired target schema non-destructively")
         {
-            diffSourceOpt,
+            diffCurrentOpt,
             diffTargetOpt,
             diffModeOpt,
             diffOutputOpt,
@@ -80,7 +75,7 @@ public static class CommandLineConfiguration
             var handler = diffHandler ?? new DiffCommandHandler();
             var options = new DiffCommandOptions
             {
-                Source = parseResult.GetValue(diffSourceOpt) ?? string.Empty,
+                Current = parseResult.GetValue(diffCurrentOpt) ?? string.Empty,
                 Target = parseResult.GetValue(diffTargetOpt) ?? string.Empty,
                 Mode = parseResult.GetValue(diffModeOpt) ?? "incremental",
                 Output = parseResult.GetValue(diffOutputOpt) ?? "console",
@@ -90,15 +85,12 @@ public static class CommandLineConfiguration
         });
 
         // --- sync command ---
-        var syncSourceOpt = new Option<string>("--source")
+        var syncCurrentOpt = new Option<string>("--current")
         {
-            Description = "Path to current/base schema to be updated (e.g. ./src/Entities)",
+            Description = "Path to current/base schema to be updated (e.g. ./src/Entities or SQL connection string)",
             Required = true
         };
-        syncSourceOpt.Aliases.Add("-s");
-        syncSourceOpt.Aliases.Add("--from");
-        syncSourceOpt.Aliases.Add("--current");
-        syncSourceOpt.Aliases.Add("--base");
+        syncCurrentOpt.Aliases.Add("-c");
 
         var syncTargetOpt = new Option<string>("--target")
         {
@@ -106,8 +98,13 @@ public static class CommandLineConfiguration
             Required = true
         };
         syncTargetOpt.Aliases.Add("-t");
-        syncTargetOpt.Aliases.Add("--to");
-        syncTargetOpt.Aliases.Add("--desired");
+
+        var syncOutputFileOpt = new Option<string?>("--output-file")
+        {
+            Description = "Optional path to export generated .sql migration script to file without applying directly to live database",
+            DefaultValueFactory = _ => null
+        };
+        syncOutputFileOpt.Aliases.Add("-o");
 
         var syncModeOpt = new Option<string>("--mode")
         {
@@ -154,10 +151,11 @@ public static class CommandLineConfiguration
         };
         syncNamespaceOpt.Aliases.Add("--ns");
 
-        var syncCommand = new Command("sync", "Synchronize current base schema to match desired target schema")
+        var syncCommand = new Command("sync", "Synchronize current schema to match desired target schema")
         {
-            syncSourceOpt,
+            syncCurrentOpt,
             syncTargetOpt,
+            syncOutputFileOpt,
             syncModeOpt,
             syncAllowDropOpt,
             syncNoDropOpt,
@@ -178,8 +176,9 @@ public static class CommandLineConfiguration
 
             var options = new SyncCommandOptions
             {
-                Source = parseResult.GetValue(syncSourceOpt) ?? string.Empty,
+                Current = parseResult.GetValue(syncCurrentOpt) ?? string.Empty,
                 Target = parseResult.GetValue(syncTargetOpt) ?? string.Empty,
+                OutputFile = parseResult.GetValue(syncOutputFileOpt),
                 Mode = parseResult.GetValue(syncModeOpt) ?? "incremental",
                 AllowDrop = allowDrop,
                 DryRun = parseResult.GetValue(syncDryRunOpt),
@@ -191,13 +190,12 @@ public static class CommandLineConfiguration
         });
 
         // --- inspect command ---
-        var inspectSourceOpt = new Option<string>("--source")
+        var inspectCurrentOpt = new Option<string>("--current")
         {
             Description = "Path to schema file or directory to inspect",
             Required = true
         };
-        inspectSourceOpt.Aliases.Add("-s");
-        inspectSourceOpt.Aliases.Add("--from");
+        inspectCurrentOpt.Aliases.Add("-c");
 
         var inspectOutputOpt = new Option<string>("--output")
         {
@@ -208,7 +206,7 @@ public static class CommandLineConfiguration
 
         var inspectCommand = new Command("inspect", "Inspect and display parsed schema tables and columns")
         {
-            inspectSourceOpt,
+            inspectCurrentOpt,
             inspectOutputOpt
         };
 
@@ -217,20 +215,19 @@ public static class CommandLineConfiguration
             var handler = inspectHandler ?? new InspectCommandHandler();
             var options = new InspectCommandOptions
             {
-                Source = parseResult.GetValue(inspectSourceOpt) ?? string.Empty,
+                Current = parseResult.GetValue(inspectCurrentOpt) ?? string.Empty,
                 Output = parseResult.GetValue(inspectOutputOpt) ?? "console"
             };
             return await handler.RunAsync(options);
         });
 
         // --- export command ---
-        var exportSourceOpt = new Option<string>("--source")
+        var exportTargetOpt = new Option<string>("--target")
         {
             Description = "Path to Mermaid schema file (.mmd, .mermaid)",
             Required = true
         };
-        exportSourceOpt.Aliases.Add("-s");
-        exportSourceOpt.Aliases.Add("--from");
+        exportTargetOpt.Aliases.Add("-t");
 
         var exportOutputOpt = new Option<string>("--output")
         {
@@ -272,7 +269,7 @@ public static class CommandLineConfiguration
 
         var exportCommand = new Command("export", "Export Mermaid schema to Excel Data Dictionary (.xlsx)")
         {
-            exportSourceOpt,
+            exportTargetOpt,
             exportOutputOpt,
             exportConfigOpt,
             exportAidOpt,
@@ -286,7 +283,7 @@ public static class CommandLineConfiguration
             var handler = exportHandler ?? new ExportCommandHandler();
             var options = new ExportCommandOptions
             {
-                Source = parseResult.GetValue(exportSourceOpt) ?? string.Empty,
+                Target = parseResult.GetValue(exportTargetOpt) ?? string.Empty,
                 Output = parseResult.GetValue(exportOutputOpt) ?? string.Empty,
                 Config = parseResult.GetValue(exportConfigOpt),
                 Aid = parseResult.GetValue(exportAidOpt),

@@ -62,6 +62,26 @@ public class SchemaDetectionServiceTests : IDisposable
         reader.Should().BeOfType<CSharpEntityReader>();
     }
 
+    [Fact]
+    public void DetectReader_ForSqlConnectionString_ReturnsSqlServerSchemaReader()
+    {
+        var service = new SchemaDetectionService();
+        var reader = service.DetectReader("Data Source=(LocalDB)\\MSSQLLocalDB;Initial Catalog=LibraryDB;Integrated Security=True;");
+
+        reader.Should().NotBeNull();
+        reader.Should().BeOfType<SchemaAlign.Readers.SqlServer.SqlServerSchemaReader>();
+    }
+
+    [Fact]
+    public void DetectReader_ForSqlScriptFile_ReturnsSqlScriptSchemaReader()
+    {
+        var service = new SchemaDetectionService();
+        var reader = service.DetectReader("migration.sql");
+
+        reader.Should().NotBeNull();
+        reader.Should().BeOfType<SchemaAlign.Readers.SqlServer.SqlScriptSchemaReader>();
+    }
+
     [Theory]
     [InlineData("schema.json")]
     [InlineData("unknown.txt")]

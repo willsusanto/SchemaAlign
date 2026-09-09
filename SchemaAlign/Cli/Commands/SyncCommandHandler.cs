@@ -1,5 +1,6 @@
 using SchemaAlign.Appliers;
 using SchemaAlign.Appliers.CSharp;
+using SchemaAlign.Appliers.SqlServer;
 using SchemaAlign.Cli.Rendering;
 using SchemaAlign.Cli.Services;
 using SchemaAlign.Diff;
@@ -16,12 +17,17 @@ public class SyncCommandOptions
     /// <summary>
     /// Path to current/base schema to be updated.
     /// </summary>
-    public string Source { get; set; } = string.Empty;
+    public string Current { get; set; } = string.Empty;
 
     /// <summary>
     /// Path to desired/target schema to align toward.
     /// </summary>
     public string Target { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional explicit path to export generated migration script to disk (e.g. migration.sql).
+    /// </summary>
+    public string? OutputFile { get; set; }
 
     /// <summary>
     /// Diff mode ('incremental' or 'snapshot').
@@ -83,26 +89,26 @@ public class SyncCommandHandler
     /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public virtual async Task<int> RunAsync(SyncCommandOptions options, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(options.Source))
+        if (string.IsNullOrWhiteSpace(options.Current))
         {
-            _console.MarkupLine("[red]Error: Source path (-s|--source) is required.[/]");
+            _console.MarkupLine("[red]Error: Current schema path (-c|--current) is required.[/]");
             return 1;
         }
 
         if (string.IsNullOrWhiteSpace(options.Target))
         {
-            _console.MarkupLine("[red]Error: Target path (-t|--target) is required.[/]");
+            _console.MarkupLine("[red]Error: Target schema path (-t|--target) is required.[/]");
             return 1;
         }
 
         try
         {
-            var sourceSchema = await _detectionService.ReadSchemaAsync(options.Source, cancellationToken);
+            var currentSchema = await _detectionService.ReadSchemaAsync(options.Current, cancellationToken);
             var targetSchema = await _detectionService.ReadSchemaAsync(options.Target, cancellationToken);
 
-            var targetType = options.TargetTypeOverride ?? _detectionService.DetectTargetType(options.Source);
+            var targetType = options.TargetTypeOverride ?? _detectionService.DetectTargetType(options.Current);
 
-            return await ExecuteAsync(sourceSchema, targetSchema, options, targetType, cancellationToken);
+            return await ExecuteAsync(currentSchema, targetSchema, options, targetType, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -114,23 +120,23 @@ public class SyncCommandHandler
     /// <summary>
     /// Executes the schema synchronization pipeline including diff calculation, interactive selection, preview, and application.
     /// </summary>
-    /// <param name="sourceSchema">Base schema.</param>
+    /// <param name="currentSchema">Base schema.</param>
     /// <param name="targetSchema">Desired target schema.</param>
     /// <param name="options">Sync command options.</param>
     /// <param name="targetType">Detected or overridden target type.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Exit code (0 for success, non-zero for error).</returns>
-    public async Task<int> ExecuteAsync(DatabaseSchema sourceSchema, DatabaseSchema targetSchema, SyncCommandOptions options, TargetType targetType, CancellationToken cancellationToken = default)
+    public async Task<int> ExecuteAsync(DatabaseSchema currentSchema, DatabaseSchema targetSchema, SyncCommandOptions options, TargetType targetType, CancellationToken cancellationToken = default)
     {
         var isSnapshot = string.Equals(options.Mode, "snapshot", StringComparison.OrdinalIgnoreCase);
         var diffOptions = isSnapshot ? SchemaDiffOptions.FullSnapshot : SchemaDiffOptions.Incremental;
 
-        // Calculate diff: Source (current base) -> Target (desired state)
-        var diff = SchemaDiffCalculator.Calculate(sourceSchema, targetSchema, diffOptions);
+        // Calculate diff: Current (base) -> Target (desired state)
+        var diff = SchemaDiffCalculator.Calculate(currentSchema, targetSchema, diffOptions);
 
         if (!diff.HasChanges)
         {
-            _console.MarkupLine("[green]✔ Source schema is already aligned with target. No changes needed.[/]");
+            _console.MarkupLine("[green]✔ Current schema is already aligned with desired target. No changes needed.[/]");
             return 0;
         }
 
@@ -174,8 +180,8 @@ public class SyncCommandHandler
             return 1;
         }
 
-        var sourcePaths = options.Source.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var primaryTargetDir = sourcePaths.Length > 0 ? sourcePaths[0] : options.Source;
+        var currentPaths = options.Current.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var primaryTargetDir = currentPaths.Length > 0 ? currentPaths[0] : options.Current;
 
         ApplierOptions applierOptions;
         if (targetType == TargetType.CSharp)
@@ -183,11 +189,22 @@ public class SyncCommandHandler
             applierOptions = new CSharpApplierOptions
             {
                 TargetDirectory = primaryTargetDir,
-                SourceDirectories = sourcePaths.ToList(),
+                SourceDirectories = currentPaths.ToList(),
                 DefaultNamespace = !string.IsNullOrWhiteSpace(options.Namespace) ? options.Namespace : "Entities",
                 AutoDetectNamespace = string.IsNullOrWhiteSpace(options.Namespace),
                 AllowDrops = options.AllowDrop,
                 DryRun = options.DryRun
+            };
+        }
+        else if (targetType == TargetType.SqlServerDatabase || targetType == TargetType.SqlServerScript)
+        {
+            applierOptions = new SqlServerApplierOptions
+            {
+                TargetDirectory = primaryTargetDir,
+                AllowDrops = options.AllowDrop,
+                DryRun = options.DryRun,
+                ConnectionString = IsConnectionString(primaryTargetDir) ? primaryTargetDir : null,
+                ScriptOutputFilePath = options.OutputFile
             };
         }
         else
@@ -210,10 +227,54 @@ public class SyncCommandHandler
             return 0;
         }
 
-        // Confirm
-        if (!options.Yes)
+        // Confirmation & Branching
+        if (targetType == TargetType.SqlServerDatabase && !options.Yes)
         {
-            var confirmed = _console.Confirm("\n[bold]Apply these changes to source codebase?[/]", defaultValue: false);
+            var sqlOpt = (SqlServerApplierOptions)applierOptions;
+            if (!string.IsNullOrWhiteSpace(options.OutputFile))
+            {
+                var confirmed = _console.Confirm($"\n[bold]Export SQL Server migration script to '{options.OutputFile}'?[/]", defaultValue: true);
+                if (!confirmed)
+                {
+                    _console.MarkupLine("[grey]Sync cancelled by user.[/]");
+                    return 0;
+                }
+            }
+            else
+            {
+                var actionChoice = _console.Prompt(
+                    new SelectionPrompt<string>()
+                        .Title("\n[bold]Select how to apply these SQL Server changes:[/]")
+                        .AddChoices(
+                            "1. Output to a .sql transaction script file",
+                            "2. Apply directly to the Live Database",
+                            "3. Cancel"));
+
+                if (actionChoice.StartsWith("1"))
+                {
+                    var outPath = _console.Prompt(new TextPrompt<string>("[bold]Enter output .sql file path (e.g. ./migration.sql):[/]").DefaultValue("migration.sql"));
+                    sqlOpt.ScriptOutputFilePath = outPath;
+                }
+                else if (actionChoice.StartsWith("2"))
+                {
+                    var confirmed = _console.Confirm("\n[bold red]Are you sure you want to execute these changes directly against the live database?[/]", defaultValue: false);
+                    if (!confirmed)
+                    {
+                        _console.MarkupLine("[grey]Sync cancelled by user.[/]");
+                        return 0;
+                    }
+                }
+                else
+                {
+                    _console.MarkupLine("[grey]Sync cancelled by user.[/]");
+                    return 0;
+                }
+            }
+        }
+        else if (!options.Yes)
+        {
+            var targetLabel = targetType == TargetType.CSharp ? "C# codebase" : "current schema";
+            var confirmed = _console.Confirm($"\n[bold]Apply these changes to {targetLabel}?[/]", defaultValue: false);
             if (!confirmed)
             {
                 _console.MarkupLine("[grey]Sync cancelled by user.[/]");
@@ -222,12 +283,19 @@ public class SyncCommandHandler
         }
 
         // Apply
-        _console.MarkupLine("\n[bold blue]Applying changes to source codebase...[/]");
+        _console.MarkupLine("\n[bold blue]Applying changes to current schema...[/]");
         var result = await applier.ApplyAsync(diff, applierOptions, cancellationToken);
 
         if (result.Success)
         {
-            _console.MarkupLine($"[green]✔ Successfully applied changes! ({result.CreatedFiles.Count} created, {result.ChangedFiles.Count} modified).[/]");
+            if (applierOptions is SqlServerApplierOptions sqlOpt && !string.IsNullOrWhiteSpace(sqlOpt.ScriptOutputFilePath))
+            {
+                _console.MarkupLine($"[green]✔ Successfully exported SQL Server migration script to '{sqlOpt.ScriptOutputFilePath}'![/]");
+            }
+            else
+            {
+                _console.MarkupLine($"[green]✔ Successfully applied changes! ({result.CreatedFiles.Count} created, {result.ChangedFiles.Count} modified).[/]");
+            }
             return 0;
         }
 
@@ -237,5 +305,13 @@ public class SyncCommandHandler
             _console.MarkupLine($"[red]  - {Markup.Escape(err)}[/]");
         }
         return 1;
+    }
+
+    private static bool IsConnectionString(string str)
+    {
+        if (string.IsNullOrWhiteSpace(str)) return false;
+        return str.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
+               str.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) ||
+               str.Contains("Initial Catalog=", StringComparison.OrdinalIgnoreCase);
     }
 }

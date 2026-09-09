@@ -55,7 +55,7 @@ erDiagram
 
         var exitCode = await handler.RunAsync(new DiffCommandOptions
         {
-            Source = csDir,
+            Current = csDir,
             Target = mermaidPath,
             Mode = "incremental",
             Detailed = true
@@ -116,7 +116,7 @@ erDiagram
 
         var exitCode = await handler.RunAsync(new DiffCommandOptions
         {
-            Source = $"{entitiesDir};{baseDir}",
+            Current = $"{entitiesDir};{baseDir}",
             Target = mermaidPath,
             Mode = "incremental",
             Detailed = true
@@ -147,7 +147,7 @@ erDiagram
 
         var exitCode = await handler.RunAsync(new InspectCommandOptions
         {
-            Source = mermaidPath,
+            Current = mermaidPath,
             Output = "console"
         });
 
@@ -165,7 +165,7 @@ erDiagram
 
         var exitCode = await handler.RunAsync(new DiffCommandOptions
         {
-            Source = Path.Combine(_testDir, "non_existent.mmd"),
+            Current = Path.Combine(_testDir, "non_existent.mmd"),
             Target = Path.Combine(_testDir, "Entities")
         });
 

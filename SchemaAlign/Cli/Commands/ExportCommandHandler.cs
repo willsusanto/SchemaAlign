@@ -9,7 +9,7 @@ namespace SchemaAlign.Cli.Commands;
 /// </summary>
 public class ExportCommandOptions
 {
-    public string Source { get; set; } = string.Empty;
+    public string Target { get; set; } = string.Empty;
     public string Output { get; set; } = string.Empty;
     public string? Config { get; set; }
     public string? Aid { get; set; }
@@ -38,9 +38,9 @@ public class ExportCommandHandler
     /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public virtual async Task<int> RunAsync(ExportCommandOptions options, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(options.Source))
+        if (string.IsNullOrWhiteSpace(options.Target))
         {
-            _console.MarkupLine("[red]Error: Source path (-s|--source) is required.[/]");
+            _console.MarkupLine("[red]Error: Target path (-t|--target) is required.[/]");
             return 1;
         }
 
@@ -50,17 +50,17 @@ public class ExportCommandHandler
             return 1;
         }
 
-        if (!File.Exists(options.Source))
+        if (!File.Exists(options.Target))
         {
-            _console.MarkupLine($"[red]Error: Source file not found: '{Markup.Escape(options.Source)}'[/]");
+            _console.MarkupLine($"[red]Error: Target file not found: '{Markup.Escape(options.Target)}'[/]");
             return 1;
         }
 
-        var ext = Path.GetExtension(options.Source);
+        var ext = Path.GetExtension(options.Target);
         if (!ext.Equals(".mmd", StringComparison.OrdinalIgnoreCase) &&
             !ext.Equals(".mermaid", StringComparison.OrdinalIgnoreCase))
         {
-            _console.MarkupLine("[red]Error: Only Mermaid ER diagrams (.mmd, .mermaid) are currently supported as export source.[/]");
+            _console.MarkupLine("[red]Error: Only Mermaid ER diagrams (.mmd, .mermaid) are currently supported as export target.[/]");
             return 1;
         }
 
@@ -72,7 +72,7 @@ public class ExportCommandHandler
 
         try
         {
-            var content = await File.ReadAllTextAsync(options.Source, cancellationToken);
+            var content = await File.ReadAllTextAsync(options.Target, cancellationToken);
             var reader = new MermaidSchemaReader();
             var schema = reader.Read(content);
 
@@ -82,7 +82,7 @@ public class ExportCommandHandler
                 options.Ip,
                 options.Db,
                 options.Title,
-                options.Source,
+                options.Target,
                 outputPath);
 
             var exporter = new ExcelDataDictionaryExporter();

@@ -2,6 +2,7 @@ using SchemaAlign.Models;
 using SchemaAlign.Readers;
 using SchemaAlign.Readers.CSharp;
 using SchemaAlign.Readers.Mermaid;
+using SchemaAlign.Readers.SqlServer;
 
 namespace SchemaAlign.Cli.Services;
 
@@ -55,24 +56,13 @@ public class SchemaDetectionService
         // 3. SQL Server Connection string
         if (IsConnectionString(trimmed))
         {
-            // Dynamically locate SqlServerSchemaReader if compiled in another assembly or namespace
-            var sqlServerType = Type.GetType("SchemaAlign.Readers.SqlServer.SqlServerSchemaReader, SchemaAlign");
-            if (sqlServerType != null)
-            {
-                return (ISchemaReader)Activator.CreateInstance(sqlServerType)!;
-            }
-            throw new NotSupportedException($"SQL Server live connection reading is not yet available in this build: '{pathOrConnectionString}'.");
+            return new SqlServerSchemaReader();
         }
 
         // 4. SQL script file
         if (trimmed.EndsWith(".sql", StringComparison.OrdinalIgnoreCase))
         {
-            var sqlScriptType = Type.GetType("SchemaAlign.Readers.SqlServer.SqlScriptSchemaReader, SchemaAlign");
-            if (sqlScriptType != null)
-            {
-                return (ISchemaReader)Activator.CreateInstance(sqlScriptType)!;
-            }
-            throw new NotSupportedException($"SQL script parsing is not yet available in this build: '{pathOrConnectionString}'.");
+            return new SqlScriptSchemaReader();
         }
 
         throw new NotSupportedException($"Schema format for '{pathOrConnectionString}' is not supported. Supported formats: .mmd, .mermaid, .cs, C# entity directory, .sql, or SQL connection strings.");
@@ -199,13 +189,8 @@ public class SchemaDetectionService
         // 5. SQL Server Connection String
         if (IsConnectionString(trimmed))
         {
-            var sqlServerType = Type.GetType("SchemaAlign.Readers.SqlServer.SqlServerSchemaReader, SchemaAlign");
-            if (sqlServerType != null)
-            {
-                var reader = (ISchemaReader)Activator.CreateInstance(sqlServerType)!;
-                return reader.Read(trimmed);
-            }
-            throw new NotSupportedException($"SQL Server live connection reading is not yet available in this build: '{pathOrConnectionString}'.");
+            var reader = new SqlServerSchemaReader();
+            return reader.Read(trimmed);
         }
 
         // 6. SQL Script file
@@ -214,14 +199,9 @@ public class SchemaDetectionService
             if (!File.Exists(trimmed))
                 throw new FileNotFoundException($"SQL script file not found: {trimmed}");
 
-            var sqlScriptType = Type.GetType("SchemaAlign.Readers.SqlServer.SqlScriptSchemaReader, SchemaAlign");
-            if (sqlScriptType != null)
-            {
-                var reader = (ISchemaReader)Activator.CreateInstance(sqlScriptType)!;
-                var text = await File.ReadAllTextAsync(trimmed, cancellationToken);
-                return reader.Read(text);
-            }
-            throw new NotSupportedException($"SQL script parsing is not yet available in this build: '{pathOrConnectionString}'.");
+            var reader = new SqlScriptSchemaReader();
+            var text = await File.ReadAllTextAsync(trimmed, cancellationToken);
+            return reader.Read(text);
         }
 
         throw new NotSupportedException($"Schema format for '{pathOrConnectionString}' is not supported. Supported formats: .mmd, .mermaid, .cs, C# entity directory, .sql, or SQL connection strings.");

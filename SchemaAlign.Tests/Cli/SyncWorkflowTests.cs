@@ -1,5 +1,6 @@
 using SchemaAlign.Appliers;
 using SchemaAlign.Cli.Commands;
+using SchemaAlign.Cli.Rendering;
 using SchemaAlign.Cli.Services;
 using SchemaAlign.Diff;
 using SchemaAlign.Models;
@@ -53,14 +54,14 @@ public class SyncWorkflowTests
 
         var sourceSchema = new DatabaseSchema(); // Current base
         var targetSchema = new DatabaseSchema(); // Desired spec
-        var newTable = new TableSchema { Name = "CustomerTable" };
+        var newTable = new TableSchema { Name = "tbl_masked_customer" };
         newTable.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
         targetSchema.AddTable(newTable);
 
         var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
         var options = new SyncCommandOptions
         {
-            Source = "Entities",
+            Current = "Entities",
             Target = "schema.mmd",
             DryRun = true,
             Yes = true,
@@ -83,17 +84,17 @@ public class SyncWorkflowTests
         registry.Register(TargetType.CSharp, mockApplier);
 
         var sourceSchema = new DatabaseSchema(); // Current base with old table
-        var oldTable = new TableSchema { Name = "OldAuditTable" };
+        var oldTable = new TableSchema { Name = "tbl_masked_audit" };
         sourceSchema.AddTable(oldTable);
 
         var targetSchema = new DatabaseSchema(); // Desired spec with new table
-        var newTable = new TableSchema { Name = "NewTable" };
+        var newTable = new TableSchema { Name = "tbl_masked_new" };
         targetSchema.AddTable(newTable);
 
         var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
         var options = new SyncCommandOptions
         {
-            Source = "Entities",
+            Current = "Entities",
             Target = "schema.mmd",
             Mode = "snapshot",
             AllowDrop = false,
@@ -108,6 +109,128 @@ public class SyncWorkflowTests
         mockApplier.ApplyCalled.Should().BeTrue();
         mockApplier.LastDiffApplied.Should().NotBeNull();
         mockApplier.LastDiffApplied!.DeletedTables.Should().BeEmpty();
-        mockApplier.LastDiffApplied!.AddedTables.Should().ContainSingle(t => t.TableName == "NewTable");
+        mockApplier.LastDiffApplied!.AddedTables.Should().ContainSingle(t => t.TableName == "tbl_masked_new");
+    }
+
+    [Fact]
+    public async Task ExecuteSync_WithRealSqlServerApplier_GeneratesMigrationFile()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "SchemaAlign_SyncSqlTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var console = new TestConsole();
+            var registry = new ApplierRegistry();
+
+            var sourceSchema = new DatabaseSchema();
+            var targetSchema = new DatabaseSchema();
+            var newTable = new TableSchema { Name = "tbl_masked_orders" };
+            newTable.AddColumn(new ColumnSchema { Name = "OrderId", Type = StandardType.BigInt, IsPrimaryKey = true, IsIdentity = true });
+            targetSchema.AddTable(newTable);
+
+            var sqlFile = Path.Combine(tempDir, "migration.sql");
+            var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
+            var options = new SyncCommandOptions
+            {
+                Current = sqlFile,
+                Target = "schema.mmd",
+                DryRun = false,
+                Yes = true,
+                Interactive = false
+            };
+
+            var exitCode = await handler.ExecuteAsync(sourceSchema, targetSchema, options, TargetType.SqlServerScript);
+
+            exitCode.Should().Be(0);
+            File.Exists(sqlFile).Should().BeTrue();
+            var content = await File.ReadAllTextAsync(sqlFile);
+            content.Should().Contain("CREATE TABLE [dbo].[tbl_masked_orders]");
+            content.Should().Contain("[OrderId] BIGINT IDENTITY(1,1) NOT NULL");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                try { Directory.Delete(tempDir, true); } catch { }
+            }
+        }
+    }
+
+    [Fact]
+    public void RenderPreviews_NullOriginalContent_RendersCleanContentWithoutLeadingPlusSigns()
+    {
+        var console = new TestConsole();
+        var previews = new List<FileDiffPreview>
+        {
+            new()
+            {
+                FilePath = "[SQL Server Live DB] LibraryDB",
+                DiffKind = DiffKind.Modified,
+                OriginalContent = null,
+                NewContent = "CREATE TABLE [dbo].[Books] (\n    [Id] INT NOT NULL\n);",
+                UnifiedDiff = "@@ -0,0 +1,3 @@\n+CREATE TABLE [dbo].[Books] (\n+    [Id] INT NOT NULL\n+);"
+            }
+        };
+
+        PreviewConsoleRenderer.RenderPreviews(previews, console);
+
+        var output = console.Output;
+        output.Should().Contain("CREATE TABLE [dbo].[Books]");
+        output.Should().NotContain("+CREATE TABLE");
+        output.Should().NotContain("+    [Id]");
+    }
+
+    [Fact]
+    public void RenderPreviews_WithOriginalContent_RendersUnifiedDiffWithPlusAndMinus()
+    {
+        var console = new TestConsole();
+        var previews = new List<FileDiffPreview>
+        {
+            new()
+            {
+                FilePath = "migration.sql",
+                DiffKind = DiffKind.Modified,
+                OriginalContent = "CREATE TABLE [dbo].[Books] ( [Id] INT );",
+                NewContent = "CREATE TABLE [dbo].[Books] ( [Id] INT, [Title] NVARCHAR(100) );",
+                UnifiedDiff = "--- migration.sql\n+++ migration.sql\n@@ -1 +1 @@\n-CREATE TABLE [dbo].[Books] ( [Id] INT );\n+CREATE TABLE [dbo].[Books] ( [Id] INT, [Title] NVARCHAR(100) );"
+            }
+        };
+
+        PreviewConsoleRenderer.RenderPreviews(previews, console);
+
+        var output = console.Output;
+        output.Should().Contain("-CREATE TABLE");
+        output.Should().Contain("+CREATE TABLE");
+    }
+
+    [Fact]
+    public async Task ExecuteSync_SqlServerDatabase_WithOutputFile_ExportsScriptFileDirectly()
+    {
+        var console = new TestConsole();
+        var mockApplier = new MockApplier();
+        var registry = new ApplierRegistry();
+        registry.Register(TargetType.SqlServerDatabase, mockApplier);
+
+        var currentSchema = new DatabaseSchema();
+        var targetSchema = new DatabaseSchema();
+        var table = new TableSchema { Name = "tbl_masked_sync_out" };
+        table.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+        targetSchema.AddTable(table);
+
+        var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
+        var options = new SyncCommandOptions
+        {
+            Current = "Server=sql;Database=TestDb;",
+            Target = "schema.mmd",
+            OutputFile = "custom_out.sql",
+            Yes = true,
+            Interactive = false
+        };
+
+        var exitCode = await handler.ExecuteAsync(currentSchema, targetSchema, options, TargetType.SqlServerDatabase);
+
+        exitCode.Should().Be(0);
+        mockApplier.ApplyCalled.Should().BeTrue();
+        console.Output.Should().Contain("Successfully exported SQL Server migration script");
     }
 }

@@ -12,6 +12,7 @@ Universal database and entity schema alignment tool for .NET. SchemaAlign parses
 - **Interactive Sync & Granular Checklist**: Multi-select prompt to toggle individual additions, modifications, and drop operations before applying changes.
 - **Destructive Change Safeguards**: Protects against accidental table and column drops unless explicitly enabled with `--allow-drop`.
 - **In-place Roslyn Entity Rewriter**: Updates existing C# entity classes while preserving custom methods, comments, and formatting.
+- **Idempotent SQL Server Migration Applier**: Generates guarded T-SQL DDL migration scripts (`.sql`) and applies schema updates directly against live SQL Server databases.
 - **Excel Data Dictionary Export**: Exports Mermaid ER diagrams to styled Excel (`.xlsx`) data dictionaries with AID, database metadata, foreign key references, table styling, and table classification background highlighting.
 
 ## CLI Usage
@@ -28,12 +29,12 @@ dotnet run --project SchemaAlign
 Compare the current base schema against the desired target schema non-destructively:
 
 ```bash
-dotnet run --project SchemaAlign -- diff --source ./src/Entities --target ./docs/schema.mmd
+dotnet run --project SchemaAlign -- diff --current ./src/Entities --target ./docs/schema.mmd
 ```
 
 **Options**:
-- `-s`, `--source` *(required)*: Path to current/base schema (`.cs`, entity directory or semicolon/comma-separated multi-paths, or database). Aliases: `--from`, `--current`, `--base`.
-- `-t`, `--target` *(required)*: Path to desired/target schema (`.mmd`, `.cs`, etc.). Aliases: `--to`, `--desired`.
+- `-c`, `--current` *(required)*: Path to current/base schema (`.cs`, entity directory or semicolon/comma-separated multi-paths, or database connection string).
+- `-t`, `--target` *(required)*: Path to desired/target schema (`.mmd`, `.cs`, etc.).
 - `-m`, `--mode`: Diff mode (`incremental` [default] or `snapshot`).
 - `-o`, `--output`: Output format (`console` [default], `json`, `markdown`).
 - `--detailed`: Display detailed property-level change tree (types, nullability, lengths).
@@ -42,17 +43,18 @@ dotnet run --project SchemaAlign -- diff --source ./src/Entities --target ./docs
 Synchronize the current base schema to match the desired target schema:
 
 ```bash
-dotnet run --project SchemaAlign -- sync --source ./src/Entities --target ./docs/schema.mmd --interactive
+dotnet run --project SchemaAlign -- sync --current ./src/Entities --target ./docs/schema.mmd --interactive
 ```
 
 **Options**:
-- `-s`, `--source` *(required)*: Path to current/base schema to be updated (supports semicolon/comma-separated multi-paths; updates apply to primary path). Aliases: `--from`, `--current`, `--base`.
-- `-t`, `--target` *(required)*: Path to desired/target schema to align toward. Aliases: `--to`, `--desired`.
+- `-c`, `--current` *(required)*: Path to current/base schema to be updated (`.cs`, entity directory or multi-paths, `.sql`, or database connection string; updates apply to primary path).
+- `-t`, `--target` *(required)*: Path to desired/target schema to align toward.
+- `-o`, `--output-file`: Optional path to export generated .sql migration script to file without applying directly to live database.
 - `-m`, `--mode`: Diff mode (`incremental` [default] or `snapshot`).
 - `-i`, `--interactive`: Run interactive checklist prompt to toggle individual changes (default: `true`).
 - `--allow-drop`: Allow destructive drops (`DROP TABLE`, `DROP COLUMN`) during synchronization.
 - `--no-drop`: Explicitly block destructive drops (default in automated mode).
-- `--dry-run`: Generate and preview unified diffs without modifying files on disk.
+- `--dry-run`: Generate and preview unified diffs without modifying files on disk or live databases.
 - `-y`, `--yes`: Apply changes non-interactively without confirmation prompt.
 - `--namespace`: Target C# namespace for generated entities (defaults to auto-detection from source files or `Entities`). Aliases: `--ns`.
 
@@ -60,24 +62,24 @@ dotnet run --project SchemaAlign -- sync --source ./src/Entities --target ./docs
 Inspect and display parsed tables, columns, and foreign keys from a schema source:
 
 ```bash
-dotnet run --project SchemaAlign -- inspect --source ./docs/schema.mmd
+dotnet run --project SchemaAlign -- inspect --current ./docs/schema.mmd
 ```
 
 **Options**:
-- `-s`, `--source` *(required)*: Path to schema file or directory to inspect (supports semicolon/comma-separated multi-paths). Aliases: `--from`.
+- `-c`, `--current` *(required)*: Path to schema file or directory to inspect (supports semicolon/comma-separated multi-paths).
 - `-o`, `--output`: Output format (`console` [default] or `json`).
 
 #### `export`
 Export Mermaid schema to an Excel Data Dictionary (`.xlsx`):
 
 ```bash
-dotnet run --project SchemaAlign -- export --source ./docs/schema.mmd --output ./docs/dictionary.xlsx
+dotnet run --project SchemaAlign -- export --target ./docs/schema.mmd --output ./docs/dictionary.xlsx
 ```
 
 **Options**:
-- `-s`, `--source` *(required)*: Path to Mermaid schema file (`.mmd`, `.mermaid`). Aliases: `--from`.
+- `-t`, `--target` *(required)*: Path to Mermaid schema file (`.mmd`, `.mermaid`).
 - `-o`, `--output` *(required)*: Path to output Excel file (`.xlsx`).
-- `-c`, `--config`: Optional path to `schemaalign.json` configuration file. Aliases: `-c`.
+- `-c`, `--config`: Optional path to `schemaalign.json` configuration file.
 - `--aid`: Application ID (AID) metadata value.
 - `--ip`: IP / Domain / Azure Cosmos host metadata value.
 - `--db`: SQL DB / Azure DB / Cosmos DB name metadata value.

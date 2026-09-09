@@ -13,7 +13,7 @@ public class InspectCommandOptions
     /// <summary>
     /// Path to schema file or directory to inspect.
     /// </summary>
-    public string Source { get; set; } = string.Empty;
+    public string Current { get; set; } = string.Empty;
 
     /// <summary>
     /// Output format ('console' or 'json').
@@ -43,15 +43,15 @@ public class InspectCommandHandler
     /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public virtual async Task<int> RunAsync(InspectCommandOptions options, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(options.Source))
+        if (string.IsNullOrWhiteSpace(options.Current))
         {
-            _console.MarkupLine("[red]Error: Source path (-s|--source) is required.[/]");
+            _console.MarkupLine("[red]Error: Current path (-c|--current) is required.[/]");
             return 1;
         }
 
         try
         {
-            var schema = await _detectionService.ReadSchemaAsync(options.Source, cancellationToken);
+            var schema = await _detectionService.ReadSchemaAsync(options.Current, cancellationToken);
 
             switch (options.Output.ToLowerInvariant())
             {
@@ -61,7 +61,7 @@ public class InspectCommandHandler
                     break;
                 case "console":
                 default:
-                    RenderConsole(schema, options.Source);
+                    RenderConsole(schema, options.Current);
                     break;
             }
 

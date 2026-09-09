@@ -21,11 +21,11 @@ public class CommandLineParsingTests
         });
 
         var root = CommandLineConfiguration.CreateRootCommand(diffHandler: mockHandler);
-        var exitCode = await root.Parse("diff -s schema.mmd -t ./Entities").InvokeAsync();
+        var exitCode = await root.Parse("diff -c schema.mmd -t ./Entities").InvokeAsync();
 
         exitCode.Should().Be(0);
         capturedOptions.Should().NotBeNull();
-        capturedOptions!.Source.Should().Be("schema.mmd");
+        capturedOptions!.Current.Should().Be("schema.mmd");
         capturedOptions.Target.Should().Be("./Entities");
         capturedOptions.Mode.Should().Be("incremental");
         capturedOptions.Output.Should().Be("console");
@@ -33,7 +33,7 @@ public class CommandLineParsingTests
     }
 
     [Fact]
-    public async Task DiffCommand_ParsesFromAndToAliases()
+    public async Task DiffCommand_ParsesLongCurrentAndTargetFlags()
     {
         DiffCommandOptions? capturedOptions = null;
 
@@ -44,11 +44,11 @@ public class CommandLineParsingTests
         });
 
         var root = CommandLineConfiguration.CreateRootCommand(diffHandler: mockHandler);
-        var exitCode = await root.Parse("diff --from ./Entities --to schema.mmd").InvokeAsync();
+        var exitCode = await root.Parse("diff --current ./Entities --target schema.mmd").InvokeAsync();
 
         exitCode.Should().Be(0);
         capturedOptions.Should().NotBeNull();
-        capturedOptions!.Source.Should().Be("./Entities");
+        capturedOptions!.Current.Should().Be("./Entities");
         capturedOptions.Target.Should().Be("schema.mmd");
     }
 
@@ -64,11 +64,13 @@ public class CommandLineParsingTests
         });
 
         var root = CommandLineConfiguration.CreateRootCommand(diffHandler: mockHandler);
-        var exitCode = await root.Parse("diff -s schema.mmd -t ./Entities -m snapshot -o json --detailed").InvokeAsync();
+        var exitCode = await root.Parse("diff -c schema.mmd -t ./Entities -m snapshot -o json --detailed").InvokeAsync();
 
         exitCode.Should().Be(0);
         capturedOptions.Should().NotBeNull();
-        capturedOptions!.Mode.Should().Be("snapshot");
+        capturedOptions!.Current.Should().Be("schema.mmd");
+        capturedOptions.Target.Should().Be("./Entities");
+        capturedOptions.Mode.Should().Be("snapshot");
         capturedOptions.Output.Should().Be("json");
         capturedOptions.Detailed.Should().BeTrue();
     }
@@ -85,11 +87,11 @@ public class CommandLineParsingTests
         });
 
         var root = CommandLineConfiguration.CreateRootCommand(syncHandler: mockHandler);
-        var exitCode = await root.Parse("sync -s schema.mmd -t ./Entities --dry-run -y").InvokeAsync();
+        var exitCode = await root.Parse("sync -c schema.mmd -t ./Entities --dry-run -y").InvokeAsync();
 
         exitCode.Should().Be(0);
         capturedOptions.Should().NotBeNull();
-        capturedOptions!.Source.Should().Be("schema.mmd");
+        capturedOptions!.Current.Should().Be("schema.mmd");
         capturedOptions.Target.Should().Be("./Entities");
         capturedOptions.Mode.Should().Be("incremental");
         capturedOptions.DryRun.Should().BeTrue();
@@ -110,11 +112,13 @@ public class CommandLineParsingTests
         });
 
         var root = CommandLineConfiguration.CreateRootCommand(syncHandler: mockHandler);
-        var exitCode = await root.Parse("sync -s schema.mmd -t ./Entities --allow-drop").InvokeAsync();
+        var exitCode = await root.Parse("sync -c schema.mmd -t ./Entities --allow-drop").InvokeAsync();
 
         exitCode.Should().Be(0);
         capturedOptions.Should().NotBeNull();
-        capturedOptions!.AllowDrop.Should().BeTrue();
+        capturedOptions!.Current.Should().Be("schema.mmd");
+        capturedOptions.Target.Should().Be("./Entities");
+        capturedOptions.AllowDrop.Should().BeTrue();
     }
 
     [Fact]
@@ -129,15 +133,17 @@ public class CommandLineParsingTests
         });
 
         var root = CommandLineConfiguration.CreateRootCommand(syncHandler: mockHandler);
-        var exitCode = await root.Parse("sync -s schema.mmd -t ./Entities --namespace MockOrg.Data.Entities").InvokeAsync();
+        var exitCode = await root.Parse("sync -c schema.mmd -t ./Entities --namespace MockOrg.Data.Entities").InvokeAsync();
 
         exitCode.Should().Be(0);
         capturedOptions.Should().NotBeNull();
-        capturedOptions!.Namespace.Should().Be("MockOrg.Data.Entities");
+        capturedOptions!.Current.Should().Be("schema.mmd");
+        capturedOptions.Target.Should().Be("./Entities");
+        capturedOptions.Namespace.Should().Be("MockOrg.Data.Entities");
     }
 
     [Fact]
-    public async Task InspectCommand_ParsesSourceAndOutput()
+    public async Task InspectCommand_ParsesCurrentAndOutput()
     {
         InspectCommandOptions? capturedOptions = null;
 
@@ -148,11 +154,11 @@ public class CommandLineParsingTests
         });
 
         var root = CommandLineConfiguration.CreateRootCommand(inspectHandler: mockHandler);
-        var exitCode = await root.Parse("inspect -s schema.mmd -o json").InvokeAsync();
+        var exitCode = await root.Parse("inspect -c schema.mmd -o json").InvokeAsync();
 
         exitCode.Should().Be(0);
         capturedOptions.Should().NotBeNull();
-        capturedOptions!.Source.Should().Be("schema.mmd");
+        capturedOptions!.Current.Should().Be("schema.mmd");
         capturedOptions.Output.Should().Be("json");
     }
 
@@ -168,17 +174,58 @@ public class CommandLineParsingTests
         });
 
         var root = CommandLineConfiguration.CreateRootCommand(exportHandler: mockHandler);
-        var exitCode = await root.Parse("export -s schema.mmd -o out.xlsx -c custom.json --aid 2026 --ip db.internal --db PROD_DB --title \"Custom Title\"").InvokeAsync();
+        var exitCode = await root.Parse("export -t schema.mmd -o out.xlsx -c custom.json --aid 2026 --ip db.internal --db PROD_DB --title \"Custom Title\"").InvokeAsync();
 
         exitCode.Should().Be(0);
         capturedOptions.Should().NotBeNull();
-        capturedOptions!.Source.Should().Be("schema.mmd");
+        capturedOptions!.Target.Should().Be("schema.mmd");
         capturedOptions.Output.Should().Be("out.xlsx");
         capturedOptions.Config.Should().Be("custom.json");
         capturedOptions.Aid.Should().Be("2026");
         capturedOptions.Ip.Should().Be("db.internal");
         capturedOptions.Db.Should().Be("PROD_DB");
         capturedOptions.Title.Should().Be("Custom Title");
+    }
+
+    [Fact]
+    public async Task DiffCommand_ParsesCurrentAndTargetOptionsAndAliases()
+    {
+        DiffCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestDiffHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(diffHandler: mockHandler);
+        var exitCode = await root.Parse("diff -c ./Entities -t schema.mmd").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Current.Should().Be("./Entities");
+        capturedOptions.Target.Should().Be("schema.mmd");
+    }
+
+    [Fact]
+    public async Task SyncCommand_ParsesCurrentAndOutputFileOptions()
+    {
+        SyncCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestSyncHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(syncHandler: mockHandler);
+        var exitCode = await root.Parse("sync --current \"Server=sql;Database=TestDb;\" --target schema.mmd -o ./migration.sql -y").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Current.Should().Be("Server=sql;Database=TestDb;");
+        capturedOptions.Target.Should().Be("schema.mmd");
+        capturedOptions.OutputFile.Should().Be("./migration.sql");
     }
 
     private class TestDiffHandler : DiffCommandHandler

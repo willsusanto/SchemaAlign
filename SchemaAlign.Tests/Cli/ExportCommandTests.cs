@@ -39,7 +39,7 @@ public class ExportCommandTests : IDisposable
         var outputFile = Path.Combine(_tempDir, "dictionary.xlsx");
 
         var rootCommand = CommandLineConfiguration.CreateRootCommand();
-        var exitCode = await rootCommand.Parse($"export --source \"{nonMermaidFile}\" --output \"{outputFile}\"").InvokeAsync();
+        var exitCode = await rootCommand.Parse($"export --target \"{nonMermaidFile}\" --output \"{outputFile}\"").InvokeAsync();
 
         exitCode.Should().NotBe(0);
         File.Exists(outputFile).Should().BeFalse();
@@ -60,7 +60,7 @@ public class ExportCommandTests : IDisposable
         var outputFile = Path.Combine(_tempDir, "dictionary.xlsx");
 
         var rootCommand = CommandLineConfiguration.CreateRootCommand();
-        var exitCode = await rootCommand.Parse($"export -s \"{mermaidFile}\" -o \"{outputFile}\" --aid 5555 --db TEST_DB").InvokeAsync();
+        var exitCode = await rootCommand.Parse($"export -t \"{mermaidFile}\" -o \"{outputFile}\" --aid 5555 --db TEST_DB").InvokeAsync();
 
         exitCode.Should().Be(0);
         File.Exists(outputFile).Should().BeTrue();
@@ -80,7 +80,7 @@ public class ExportCommandTests : IDisposable
         var outputFile = Path.Combine(_tempDir, "out_from_mermaid.xlsx");
 
         var rootCommand = CommandLineConfiguration.CreateRootCommand();
-        var exitCode = await rootCommand.Parse($"export -s \"{mermaidFile}\" -o \"{outputFile}\"").InvokeAsync();
+        var exitCode = await rootCommand.Parse($"export -t \"{mermaidFile}\" -o \"{outputFile}\"").InvokeAsync();
 
         exitCode.Should().Be(0);
         File.Exists(outputFile).Should().BeTrue();
