@@ -67,14 +67,14 @@ public class WizardCommandHandler
             return await _inspectHandler.RunAsync(new InspectCommandOptions { Source = source }, cancellationToken);
         }
 
-        var srcPath = _console.Ask<string>("[bold]Enter Current/Base schema path (e.g. ./src/Entities or live DB):[/]");
-        var tgtPath = _console.Ask<string>("[bold]Enter Desired/Target schema path (e.g. schema.mmd or new spec):[/]");
+        var currentPath = _console.Ask<string>("[bold]Enter Current schema path (e.g. ./src/Entities or live DB):[/]");
+        var targetPath = _console.Ask<string>("[bold]Enter Desired target schema path (e.g. schema.mmd or new spec):[/]");
 
         var modeChoice = _console.Prompt(
             new SelectionPrompt<string>()
                 .Title("[bold]Select diff mode:[/]")
                 .AddChoices("1. Incremental Mode (Recommended: Sprint diagram; preserves unmentioned tables in current codebase)",
-                            "2. Full Snapshot Mode (Target is exact full truth; marks tables omitted from target as deleted)"));
+                            "2. Full Snapshot Mode (Desired schema is exact full truth; marks tables omitted from desired spec as deleted)"));
 
         var mode = modeChoice.StartsWith("1") ? "incremental" : "snapshot";
 
@@ -83,8 +83,8 @@ public class WizardCommandHandler
             var detailed = _console.Confirm("Show detailed property-level change tree?", defaultValue: true);
             return await _diffHandler.RunAsync(new DiffCommandOptions
             {
-                Source = srcPath,
-                Target = tgtPath,
+                Current = currentPath,
+                Target = targetPath,
                 Mode = mode,
                 Detailed = detailed
             }, cancellationToken);
@@ -97,8 +97,8 @@ public class WizardCommandHandler
 
             return await _syncHandler.RunAsync(new SyncCommandOptions
             {
-                Source = srcPath,
-                Target = tgtPath,
+                Current = currentPath,
+                Target = targetPath,
                 Mode = mode,
                 AllowDrop = allowDrops,
                 DryRun = dryRun,

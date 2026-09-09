@@ -16,6 +16,11 @@ public class SqlServerApplierOptions : ApplierOptions
     public string? ConnectionString { get; set; }
 
     /// <summary>
+    /// Optional explicit path to output the generated .sql migration script to disk (even when ConnectionString is present).
+    /// </summary>
+    public string? ScriptOutputFilePath { get; set; }
+
+    /// <summary>
     /// Whether to wrap migration operations in a transaction block. Default is true.
     /// </summary>
     public bool Transactional { get; set; } = true;

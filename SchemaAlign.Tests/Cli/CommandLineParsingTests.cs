@@ -181,6 +181,47 @@ public class CommandLineParsingTests
         capturedOptions.Title.Should().Be("Custom Title");
     }
 
+    [Fact]
+    public async Task DiffCommand_ParsesCurrentAndTargetOptionsAndAliases()
+    {
+        DiffCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestDiffHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(diffHandler: mockHandler);
+        var exitCode = await root.Parse("diff -c ./Entities -t schema.mmd").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Current.Should().Be("./Entities");
+        capturedOptions.Target.Should().Be("schema.mmd");
+    }
+
+    [Fact]
+    public async Task SyncCommand_ParsesCurrentAndOutputFileOptions()
+    {
+        SyncCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestSyncHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(syncHandler: mockHandler);
+        var exitCode = await root.Parse("sync --current \"Server=sql;Database=TestDb;\" --target schema.mmd -o ./migration.sql -y").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Current.Should().Be("Server=sql;Database=TestDb;");
+        capturedOptions.Target.Should().Be("schema.mmd");
+        capturedOptions.OutputFile.Should().Be("./migration.sql");
+    }
+
     private class TestDiffHandler : DiffCommandHandler
     {
         private readonly Func<DiffCommandOptions, Task<int>> _action;

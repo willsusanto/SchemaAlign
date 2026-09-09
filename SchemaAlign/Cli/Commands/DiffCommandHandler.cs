@@ -11,10 +11,25 @@ namespace SchemaAlign.Cli.Commands;
 /// </summary>
 public class DiffCommandOptions
 {
+    private string _current = string.Empty;
+
     /// <summary>
     /// Path to current/base schema.
     /// </summary>
-    public string Source { get; set; } = string.Empty;
+    public string Current
+    {
+        get => _current;
+        set => _current = value;
+    }
+
+    /// <summary>
+    /// Backward-compatible alias for Current.
+    /// </summary>
+    public string Source
+    {
+        get => _current;
+        set => _current = value;
+    }
 
     /// <summary>
     /// Path to desired/target schema.
@@ -59,24 +74,24 @@ public class DiffCommandHandler
     /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public virtual async Task<int> RunAsync(DiffCommandOptions options, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(options.Source))
+        if (string.IsNullOrWhiteSpace(options.Current))
         {
-            _console.MarkupLine("[red]Error: Source path (-s|--source) is required.[/]");
+            _console.MarkupLine("[red]Error: Current schema path (-c|--current) is required.[/]");
             return 1;
         }
 
         if (string.IsNullOrWhiteSpace(options.Target))
         {
-            _console.MarkupLine("[red]Error: Target path (-t|--target) is required.[/]");
+            _console.MarkupLine("[red]Error: Target schema path (-t|--target) is required.[/]");
             return 1;
         }
 
         try
         {
-            var sourceSchema = await _detectionService.ReadSchemaAsync(options.Source, cancellationToken);
+            var currentSchema = await _detectionService.ReadSchemaAsync(options.Current, cancellationToken);
             var targetSchema = await _detectionService.ReadSchemaAsync(options.Target, cancellationToken);
 
-            return Execute(sourceSchema, targetSchema, options);
+            return Execute(currentSchema, targetSchema, options);
         }
         catch (Exception ex)
         {

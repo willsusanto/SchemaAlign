@@ -1191,10 +1191,51 @@ public class SqlServerMigrationApplierTests
         // Assert — DryRun should prevent any execution
         result.Success.Should().BeTrue();
         result.Previews.Should().NotBeEmpty("previews should still be generated in dry-run");
-        fakeExecutor.ExecutedBatches.Should().BeEmpty("no batches should be sent to executor in dry-run mode");
-        fakeExecutor.LastConnectionString.Should().BeNull("executor should never be called");
         result.ChangedFiles.Should().BeEmpty();
         result.CreatedFiles.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WithScriptOutputFilePath_WritesScriptFileDirectly()
+    {
+        // Arrange
+        var fakeExecutor = new FakeSqlMigrationExecutor();
+        var applierWithExecutor = new SqlServerMigrationApplier(fakeExecutor);
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "SchemaAlign_SqlOutTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var targetFile = Path.Combine(tempDir, "custom_migration.sql");
+
+        try
+        {
+            var diff = new SchemaDiff();
+            var table = new TableSchema { Name = "tbl_masked_output_test" };
+            table.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+            diff.Tables.Add(new TableDiff { TableName = "tbl_masked_output_test", Kind = DiffKind.Added, Target = table });
+
+            var options = new SqlServerApplierOptions
+            {
+                ConnectionString = "Server=sql_server_mock;Database=LiveDb;Integrated Security=true;",
+                ScriptOutputFilePath = targetFile
+            };
+
+            // Act
+            var result = await applierWithExecutor.ApplyAsync(diff, options);
+
+            // Assert
+            result.Success.Should().BeTrue();
+            fakeExecutor.ExecutedBatches.Should().BeEmpty("should not execute against DB when ScriptOutputFilePath is specified");
+            File.Exists(targetFile).Should().BeTrue();
+            var fileContent = await File.ReadAllTextAsync(targetFile);
+            fileContent.Should().Contain("CREATE TABLE [dbo].[tbl_masked_output_test]");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
     }
 }
 

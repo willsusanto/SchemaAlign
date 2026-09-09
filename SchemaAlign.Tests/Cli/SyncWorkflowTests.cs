@@ -202,4 +202,35 @@ public class SyncWorkflowTests
         output.Should().Contain("-CREATE TABLE");
         output.Should().Contain("+CREATE TABLE");
     }
+
+    [Fact]
+    public async Task ExecuteSync_SqlServerDatabase_WithOutputFile_ExportsScriptFileDirectly()
+    {
+        var console = new TestConsole();
+        var mockApplier = new MockApplier();
+        var registry = new ApplierRegistry();
+        registry.Register(TargetType.SqlServerDatabase, mockApplier);
+
+        var currentSchema = new DatabaseSchema();
+        var targetSchema = new DatabaseSchema();
+        var table = new TableSchema { Name = "tbl_masked_sync_out" };
+        table.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+        targetSchema.AddTable(table);
+
+        var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
+        var options = new SyncCommandOptions
+        {
+            Current = "Server=sql;Database=TestDb;",
+            Target = "schema.mmd",
+            OutputFile = "custom_out.sql",
+            Yes = true,
+            Interactive = false
+        };
+
+        var exitCode = await handler.ExecuteAsync(currentSchema, targetSchema, options, TargetType.SqlServerDatabase);
+
+        exitCode.Should().Be(0);
+        mockApplier.ApplyCalled.Should().BeTrue();
+        console.Output.Should().Contain("Successfully exported SQL Server migration script");
+    }
 }

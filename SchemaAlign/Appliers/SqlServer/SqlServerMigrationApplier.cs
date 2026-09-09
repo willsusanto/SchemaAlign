@@ -133,6 +133,32 @@ public class SqlServerMigrationApplier : ISchemaApplier
                 return result;
             }
 
+            if (!string.IsNullOrWhiteSpace(sqlOptions.ScriptOutputFilePath))
+            {
+                var explicitFile = sqlOptions.ScriptOutputFilePath;
+                var explicitDir = Path.GetDirectoryName(explicitFile);
+                if (!string.IsNullOrEmpty(explicitDir) && !Directory.Exists(explicitDir))
+                {
+                    Directory.CreateDirectory(explicitDir);
+                }
+
+                var isNewFile = !File.Exists(explicitFile);
+                var sqlScript = GenerateMigrationScript(diff, sqlOptions);
+
+                await File.WriteAllTextAsync(explicitFile, sqlScript, cancellationToken);
+
+                if (isNewFile)
+                {
+                    result.CreatedFiles.Add(explicitFile);
+                }
+                else
+                {
+                    result.ChangedFiles.Add(explicitFile);
+                }
+
+                return result;
+            }
+
             var connString = !string.IsNullOrWhiteSpace(sqlOptions.ConnectionString)
                 ? sqlOptions.ConnectionString
                 : (IsConnectionString(options.TargetDirectory) ? options.TargetDirectory : null);
