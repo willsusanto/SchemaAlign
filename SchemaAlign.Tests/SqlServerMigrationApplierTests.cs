@@ -665,7 +665,7 @@ public class SqlServerMigrationApplierTests
     }
 
     [Fact]
-    public void GenerateMigrationScript_ModifiedColumnComment_WhenIncludeCommentsTrue_GeneratesExtendedPropertyUpsert()
+    public void GenerateMigrationScript_ModifiedColumnComment_DoesNotEmitExtendedProperties()
     {
         // Arrange
         var tableDiff = new TableDiff
@@ -689,20 +689,12 @@ public class SqlServerMigrationApplierTests
         var diff = new SchemaDiff();
         diff.Tables.Add(tableDiff);
 
-        var options = new SqlServerApplierOptions { IncludeComments = true };
-
         // Act
-        var script = _applier.GenerateMigrationScript(diff, options);
-        var scriptDefault = _applier.GenerateMigrationScript(diff);
+        var script = _applier.GenerateMigrationScript(diff);
 
-        // Assert
-        script.Should().Contain("IF EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'dbo', N'TABLE', N'tbl_masked_docs', N'COLUMN', N'Notes'))");
-        script.Should().Contain("EXEC sys.sp_updateextendedproperty @name=N'MS_Description', @value=N'Updated field comment'");
-        script.Should().Contain("EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Updated field comment'");
-
-        // By default, comments are disabled
-        scriptDefault.Should().NotContain("sp_updateextendedproperty");
-        scriptDefault.Should().NotContain("sp_addextendedproperty");
+        // Assert — comments / extended properties are never emitted in T-SQL DDL
+        script.Should().NotContain("sp_updateextendedproperty");
+        script.Should().NotContain("sp_addextendedproperty");
     }
 
     [Fact]
@@ -836,7 +828,7 @@ public class SqlServerMigrationApplierTests
     }
 
     [Fact]
-    public void GenerateMigrationScript_SpecialCharactersInCommentsAndCustomSchema_EscapesSqlAndUsesCustomSchema()
+    public void GenerateMigrationScript_CustomSchema_UsesCustomSchema()
     {
         // Arrange
         var diff = new SchemaDiff();
@@ -857,8 +849,7 @@ public class SqlServerMigrationApplierTests
 
         var options = new SqlServerApplierOptions
         {
-            DefaultSchema = "inventory",
-            IncludeComments = true
+            DefaultSchema = "inventory"
         };
 
         // Act
@@ -866,13 +857,11 @@ public class SqlServerMigrationApplierTests
 
         // Assert
         script.Should().Contain("CREATE TABLE [inventory].[tbl_quote_test]");
-        script.Should().Contain("@value=N'It''s a table with ''quotes'' in description'");
-        script.Should().Contain("@value=N'User''s description'");
-        script.Should().Contain("@level0name=N'inventory'");
+        script.Should().NotContain("sp_addextendedproperty");
     }
 
     [Fact]
-    public void GenerateMigrationScript_ModifiedColumnExtendedPropertyOnly_WhenIncludeCommentsTrue_DoesNotEmitAlterColumn()
+    public void GenerateMigrationScript_ModifiedColumnCommentOnly_DoesNotEmitAlterColumn()
     {
         // Arrange
         var tableDiff = new TableDiff
@@ -896,16 +885,13 @@ public class SqlServerMigrationApplierTests
         var diff = new SchemaDiff();
         diff.Tables.Add(tableDiff);
 
-        var options = new SqlServerApplierOptions { IncludeComments = true };
-
         // Act
-        var script = _applier.GenerateMigrationScript(diff, options);
+        var script = _applier.GenerateMigrationScript(diff);
 
         // Assert
         script.Should().NotContain("ALTER COLUMN");
-        script.Should().Contain("sp_updateextendedproperty");
-        script.Should().Contain("sp_addextendedproperty");
-        script.Should().Contain("@value=N'New description'");
+        script.Should().NotContain("sp_updateextendedproperty");
+        script.Should().NotContain("sp_addextendedproperty");
     }
 
     [Fact]
