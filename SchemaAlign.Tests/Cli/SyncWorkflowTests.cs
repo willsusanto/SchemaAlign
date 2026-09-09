@@ -254,7 +254,7 @@ public class SyncWorkflowTests
         var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
         var options = new SyncCommandOptions
         {
-            Source = "Entities",
+            Current = "Entities",
             Target = "schema.mmd",
             BaseClass = "MockTrackedBase",
             DryRun = true,
@@ -295,7 +295,7 @@ public class SyncWorkflowTests
         var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
         var options = new SyncCommandOptions
         {
-            Source = "Entities",
+            Current = "Entities",
             Target = "schema.mmd",
             DryRun = true,
             Yes = true,
@@ -316,20 +316,20 @@ public class SyncWorkflowTests
     }
 
     [Fact]
-    public async Task RunAsync_MissingSource_ReturnsError()
+    public async Task RunAsync_MissingCurrent_ReturnsError()
     {
         var console = new TestConsole();
         var handler = new SyncCommandHandler(console: console);
         var options = new SyncCommandOptions
         {
-            Source = "",
+            Current = "",
             Target = "schema.mmd"
         };
 
         var exitCode = await handler.RunAsync(options);
 
         exitCode.Should().Be(1);
-        console.Output.Should().Contain("Source path (-s|--source) is required");
+        console.Output.Should().Contain("Current schema path (-c|--current) is required");
     }
 
     [Fact]
@@ -339,13 +339,13 @@ public class SyncWorkflowTests
         var handler = new SyncCommandHandler(console: console);
         var options = new SyncCommandOptions
         {
-            Source = "Entities",
+            Current = "Entities",
             Target = ""
         };
 
         var exitCode = await handler.RunAsync(options);
 
         exitCode.Should().Be(1);
-        console.Output.Should().Contain("Target path (-t|--target) is required");
+        console.Output.Should().Contain("Target schema path (-t|--target) is required");
     }
 }

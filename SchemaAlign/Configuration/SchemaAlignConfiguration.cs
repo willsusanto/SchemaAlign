@@ -8,7 +8,16 @@ public class SchemaAlignConfiguration
     /// <summary>
     /// Path to current/base schema (file, directory, or connection string).
     /// </summary>
-    public string? Source { get; set; }
+    public string? Current { get; set; }
+
+    /// <summary>
+    /// Legacy alias for Current.
+    /// </summary>
+    public string? Source
+    {
+        get => Current;
+        set => Current = value;
+    }
 
     /// <summary>
     /// Path to desired/target schema (e.g. .mmd diagram or new spec).
