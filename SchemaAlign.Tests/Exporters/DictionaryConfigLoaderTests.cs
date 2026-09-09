@@ -106,4 +106,46 @@ public class DictionaryConfigLoaderTests : IDisposable
         options.DatabaseName.Should().Be("OVERRIDE_DB");
         options.SystemTitle.Should().Be("Override Title");
     }
+
+    [Fact]
+    public void LoadOptions_DefaultHighlightOptions_AreSet()
+    {
+        var options = DictionaryConfigLoader.Load(
+            configPath: null,
+            cliAid: null,
+            cliIp: null,
+            cliDb: null,
+            cliTitle: null,
+            sourcePath: "diagram.mmd",
+            outputPath: "out.xlsx");
+
+        options.HighlightClasses.Should().BeEquivalentTo(new[] { "newTbl", "updatedTbl" });
+        options.HighlightColor.Should().Be("#ffcccc");
+    }
+
+    [Fact]
+    public void LoadOptions_WhenConfigContainsHighlightOptions_LoadsCustomHighlightClassesAndColor()
+    {
+        var configFile = Path.Combine(_tempDir, "schemaalign.json");
+        File.WriteAllText(configFile, """
+            {
+                "dictionary": {
+                    "highlightClasses": ["specialTbl", "auditTbl"],
+                    "highlightColor": "#e0f7fa"
+                }
+            }
+            """);
+
+        var options = DictionaryConfigLoader.Load(
+            configPath: configFile,
+            cliAid: null,
+            cliIp: null,
+            cliDb: null,
+            cliTitle: null,
+            sourcePath: "diagram.mmd",
+            outputPath: "out.xlsx");
+
+        options.HighlightClasses.Should().BeEquivalentTo(new[] { "specialTbl", "auditTbl" });
+        options.HighlightColor.Should().Be("#e0f7fa");
+    }
 }

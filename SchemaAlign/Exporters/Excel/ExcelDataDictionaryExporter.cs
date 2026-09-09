@@ -178,8 +178,14 @@ public class ExcelDataDictionaryExporter
             var endRow = row - 1;
             if (endRow >= startRow)
             {
-                // Table boundary styling: medium separator lines between tables, and medium outer table edges
                 var tableRange = ws.Range(startRow, 1, endRow, 15);
+
+                if (options.HighlightClasses != null && table.Classes.Any(c => options.HighlightClasses.Contains(c)))
+                {
+                    tableRange.Style.Fill.BackgroundColor = XLColor.FromHtml(options.HighlightColor);
+                }
+
+                // Table boundary styling: medium separator lines between tables, and medium outer table edges
                 tableRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
                 tableRange.FirstRow().Style.Border.TopBorder = XLBorderStyleValues.Medium;
                 tableRange.LastRow().Style.Border.BottomBorder = XLBorderStyleValues.Medium;

@@ -14,6 +14,8 @@ public static class DictionaryConfigLoader
         public string? Ip { get; set; }
         public string? Database { get; set; }
         public string? SystemTitle { get; set; }
+        public List<string>? HighlightClasses { get; set; }
+        public string? HighlightColor { get; set; }
     }
 
     private class DictionarySection
@@ -22,6 +24,8 @@ public static class DictionaryConfigLoader
         public string? Ip { get; set; }
         public string? Database { get; set; }
         public string? SystemTitle { get; set; }
+        public List<string>? HighlightClasses { get; set; }
+        public string? HighlightColor { get; set; }
     }
 
     /// <summary>
@@ -71,11 +75,21 @@ public static class DictionaryConfigLoader
                     var cfgIp = section?.Ip ?? doc.Ip;
                     var cfgDb = section?.Database ?? doc.Database;
                     var cfgTitle = section?.SystemTitle ?? doc.SystemTitle;
+                    var cfgHighlightClasses = section?.HighlightClasses ?? doc.HighlightClasses;
+                    var cfgHighlightColor = section?.HighlightColor ?? doc.HighlightColor;
 
                     if (!string.IsNullOrWhiteSpace(cfgAid)) options.Aid = cfgAid;
                     if (!string.IsNullOrWhiteSpace(cfgIp)) options.IpDomain = cfgIp;
                     if (!string.IsNullOrWhiteSpace(cfgDb)) options.DatabaseName = cfgDb;
                     if (!string.IsNullOrWhiteSpace(cfgTitle)) options.SystemTitle = cfgTitle;
+                    if (cfgHighlightClasses != null)
+                    {
+                        options.HighlightClasses = new HashSet<string>(cfgHighlightClasses, StringComparer.OrdinalIgnoreCase);
+                    }
+                    if (!string.IsNullOrWhiteSpace(cfgHighlightColor))
+                    {
+                        options.HighlightColor = cfgHighlightColor;
+                    }
                 }
             }
             catch (Exception ex)

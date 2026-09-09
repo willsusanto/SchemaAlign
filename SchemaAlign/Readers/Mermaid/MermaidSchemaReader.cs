@@ -7,13 +7,15 @@ namespace SchemaAlign.Readers.Mermaid;
 /// <summary>
 /// Reads database schemas from Mermaid ER diagrams (erDiagram syntax).
 /// Supports entity definitions, column attributes, data types, nullability (via '?' suffix or 'NULL'/'nullable' comments),
-/// dimensions (length, precision, scale), PK/FK markers, and relationship cardinality.
+/// dimensions (length, precision, scale), PK/FK markers, relationship cardinality, and table classification (class statements and inline :::class notation).
 /// </summary>
 public class MermaidSchemaReader : ISchemaReader
 {
     private static readonly Regex FrontmatterRegex = new(@"^---\s*$", RegexOptions.Compiled);
-    private static readonly Regex EntityBlockStartRegex = new(@"^([a-zA-Z0-9_\.\[\]]+)(?:\[""([^""]*)""\])?\s*\{", RegexOptions.Compiled);
-    private static readonly Regex SingleLineEntityRegex = new(@"^([a-zA-Z0-9_\.\[\]]+)(?:\[""([^""]*)""\])?\s*\{([^}]*)\}", RegexOptions.Compiled);
+    private static readonly Regex EntityBlockStartRegex = new(@"^([a-zA-Z0-9_\.\[\]]+)(?::::([a-zA-Z0-9_-]+))?(?:\[""([^""]*)""\])?(?::::([a-zA-Z0-9_-]+))?\s*\{", RegexOptions.Compiled);
+    private static readonly Regex SingleLineEntityRegex = new(@"^([a-zA-Z0-9_\.\[\]]+)(?::::([a-zA-Z0-9_-]+))?(?:\[""([^""]*)""\])?(?::::([a-zA-Z0-9_-]+))?\s*\{([^}]*)\}", RegexOptions.Compiled);
+    private static readonly Regex StandaloneEntityRegex = new(@"^([a-zA-Z0-9_\.\[\]]+):::([a-zA-Z0-9_-]+)(?:\[""([^""]*)""\])?$", RegexOptions.Compiled);
+    private static readonly Regex ClassStatementRegex = new(@"^class\s+(.+?)\s+([a-zA-Z0-9_-]+)$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex AttributeLineRegex = new(@"^([a-zA-Z0-9_]+(?:\([^)]*\))?\??)\s+([a-zA-Z0-9_\[\]]+)(.*)$", RegexOptions.Compiled);
     private static readonly Regex CommentRegex = new(@"[""']([^""']*)[""']\s*$", RegexOptions.Compiled);
     private static readonly Regex PrecScaleCommentRegex = new(@"^(\d+)\s*,\s*(\d+)(?:\s*,\s*(.*))?$", RegexOptions.Compiled);
@@ -66,7 +68,9 @@ public class MermaidSchemaReader : ISchemaReader
                 rawLine.StartsWith("accTitle:", StringComparison.OrdinalIgnoreCase) ||
                 rawLine.StartsWith("accDescr:", StringComparison.OrdinalIgnoreCase) ||
                 rawLine.StartsWith("direction", StringComparison.OrdinalIgnoreCase) ||
-                rawLine.Equals("erDiagram", StringComparison.OrdinalIgnoreCase))
+                rawLine.Equals("erDiagram", StringComparison.OrdinalIgnoreCase) ||
+                (rawLine.StartsWith("classDef", StringComparison.OrdinalIgnoreCase) &&
+                 (rawLine.Length == 8 || char.IsWhiteSpace(rawLine[8]))))
             {
                 continue;
             }
@@ -85,12 +89,31 @@ public class MermaidSchemaReader : ISchemaReader
                 continue;
             }
 
-            // Single line entity e.g. Customer { int id PK }
+            // Class assignment statement e.g. class TableA, TableB existingTbl
+            var classMatch = ClassStatementRegex.Match(rawLine);
+            if (classMatch.Success && !rawLine.EndsWith("{"))
+            {
+                var tableListRaw = classMatch.Groups[1].Value;
+                var className = classMatch.Groups[2].Value;
+
+                var tableNames = tableListRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                foreach (var rawTable in tableNames)
+                {
+                    var (schemaName, tableName) = SplitSchemaAndTableName(rawTable);
+                    var table = schema.GetOrCreateTable(tableName, schemaName);
+                    table.Classes.Add(className);
+                }
+                continue;
+            }
+
+            // Single line entity e.g. Customer { int id PK } or Customer:::newTbl { int id PK }
             var singleLineMatch = SingleLineEntityRegex.Match(rawLine);
             if (singleLineMatch.Success)
             {
                 var fullTableName = singleLineMatch.Groups[1].Value;
-                var tableComment = singleLineMatch.Groups[2].Success ? singleLineMatch.Groups[2].Value : null;
+                var inlineClass = singleLineMatch.Groups[2].Success ? singleLineMatch.Groups[2].Value :
+                                  singleLineMatch.Groups[4].Success ? singleLineMatch.Groups[4].Value : null;
+                var tableComment = singleLineMatch.Groups[3].Success ? singleLineMatch.Groups[3].Value : null;
                 var (schemaName, tableName) = SplitSchemaAndTableName(fullTableName);
 
                 var table = schema.GetOrCreateTable(tableName, schemaName);
@@ -98,8 +121,12 @@ public class MermaidSchemaReader : ISchemaReader
                 {
                     table.Comment = tableComment;
                 }
+                if (!string.IsNullOrWhiteSpace(inlineClass))
+                {
+                    table.Classes.Add(inlineClass);
+                }
 
-                var attributesContent = singleLineMatch.Groups[3].Value;
+                var attributesContent = singleLineMatch.Groups[5].Value;
                 if (!string.IsNullOrWhiteSpace(attributesContent))
                 {
                     var attrLines = attributesContent.Split(new[] { ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
@@ -115,12 +142,14 @@ public class MermaidSchemaReader : ISchemaReader
                 continue;
             }
 
-            // Multi-line entity block start e.g. Customer {
+            // Multi-line entity block start e.g. Customer { or Customer:::newTbl {
             var entityMatch = EntityBlockStartRegex.Match(rawLine);
             if (entityMatch.Success)
             {
                 var fullTableName = entityMatch.Groups[1].Value;
-                var tableComment = entityMatch.Groups[2].Success ? entityMatch.Groups[2].Value : null;
+                var inlineClass = entityMatch.Groups[2].Success ? entityMatch.Groups[2].Value :
+                                  entityMatch.Groups[4].Success ? entityMatch.Groups[4].Value : null;
+                var tableComment = entityMatch.Groups[3].Success ? entityMatch.Groups[3].Value : null;
                 var (schemaName, tableName) = SplitSchemaAndTableName(fullTableName);
 
                 currentTable = schema.GetOrCreateTable(tableName, schemaName);
@@ -128,6 +157,28 @@ public class MermaidSchemaReader : ISchemaReader
                 {
                     currentTable.Comment = tableComment;
                 }
+                if (!string.IsNullOrWhiteSpace(inlineClass))
+                {
+                    currentTable.Classes.Add(inlineClass);
+                }
+                continue;
+            }
+
+            // Standalone entity with class e.g. Customer:::newTbl
+            var standaloneMatch = StandaloneEntityRegex.Match(rawLine);
+            if (standaloneMatch.Success)
+            {
+                var fullTableName = standaloneMatch.Groups[1].Value;
+                var inlineClass = standaloneMatch.Groups[2].Value;
+                var tableComment = standaloneMatch.Groups[3].Success ? standaloneMatch.Groups[3].Value : null;
+                var (schemaName, tableName) = SplitSchemaAndTableName(fullTableName);
+
+                var table = schema.GetOrCreateTable(tableName, schemaName);
+                if (!string.IsNullOrWhiteSpace(tableComment))
+                {
+                    table.Comment = tableComment;
+                }
+                table.Classes.Add(inlineClass);
                 continue;
             }
 

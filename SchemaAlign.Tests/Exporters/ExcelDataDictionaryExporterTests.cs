@@ -556,4 +556,121 @@ public class ExcelDataDictionaryExporterTests : IDisposable
 
         File.WriteAllText(Path.Combine(evidenceDir, "export_verification_report.md"), reportSb.ToString());
     }
+
+    [Fact]
+    public void Export_WhenTablesHaveClassification_AppliesHighlightOnlyToMatchingClasses()
+    {
+        var mermaidContent = """
+            erDiagram
+                classDef existingTbl fill:#c8e6c9,stroke:#2e7d32,color:#1b1b1b
+                classDef newTbl fill:#bbdefb,stroke:#1565c0,color:#1b1b1b
+                classDef updatedTbl fill:#FFE8CB,stroke:#E89C3D,color:#1b1b1b
+
+                class TblAlpha existingTbl
+                class TblBeta newTbl
+                class TblGamma updatedTbl
+
+                TblAlpha {
+                    int ColA PK
+                }
+                TblBeta {
+                    int ColB PK
+                }
+                TblGamma {
+                    int ColC PK
+                }
+                TblDelta {
+                    int ColD PK
+                }
+            """;
+
+        var reader = new MermaidSchemaReader();
+        var schema = reader.Read(mermaidContent);
+
+        var options = new DictionaryExportOptions
+        {
+            DatabaseName = "HIGHLIGHT_DB",
+            OutputPath = Path.Combine(_tempOutputDir, "output_highlight.xlsx")
+        };
+
+        var exporter = new ExcelDataDictionaryExporter();
+        exporter.Export(schema, options);
+
+        using var workbook = new XLWorkbook(options.OutputPath);
+        var ws = workbook.Worksheet("HIGHLIGHT_DB");
+
+        var expectedHighlight = XLColor.FromHtml("#ffcccc");
+
+        // Row 3: TblAlpha (existingTbl) -> Default fill (no highlight)
+        ws.Cell("D3").GetString().Should().Be("TblAlpha");
+        ws.Cell("D3").Style.Fill.PatternType.Should().Be(XLFillPatternValues.None);
+
+        // Row 4: TblBeta (newTbl) -> Highlighted (#ffcccc) across row
+        ws.Cell("D4").GetString().Should().Be("TblBeta");
+        ws.Cell("D4").Style.Fill.BackgroundColor.Should().Be(expectedHighlight);
+        ws.Cell("A4").Style.Fill.BackgroundColor.Should().Be(expectedHighlight);
+        ws.Cell("O4").Style.Fill.BackgroundColor.Should().Be(expectedHighlight);
+
+        // Row 5: TblGamma (updatedTbl) -> Highlighted (#ffcccc) across row
+        ws.Cell("D5").GetString().Should().Be("TblGamma");
+        ws.Cell("D5").Style.Fill.BackgroundColor.Should().Be(expectedHighlight);
+        ws.Cell("A5").Style.Fill.BackgroundColor.Should().Be(expectedHighlight);
+        ws.Cell("O5").Style.Fill.BackgroundColor.Should().Be(expectedHighlight);
+
+        // Row 6: TblDelta (unclassified) -> Default fill (no highlight)
+        ws.Cell("D6").GetString().Should().Be("TblDelta");
+        ws.Cell("D6").Style.Fill.PatternType.Should().Be(XLFillPatternValues.None);
+
+        // Verify borders and fonts are preserved on highlighted rows
+        ws.Cell("D4").Style.Font.FontName.Should().Be("Calibri");
+        ws.Cell("D4").Style.Font.FontSize.Should().Be(10);
+        ws.Cell("D4").Style.Border.TopBorder.Should().Be(XLBorderStyleValues.Medium);
+        ws.Cell("D4").Style.Border.BottomBorder.Should().Be(XLBorderStyleValues.Medium);
+        ws.Cell("A4").Style.Border.LeftBorder.Should().Be(XLBorderStyleValues.Medium);
+        ws.Cell("O4").Style.Border.RightBorder.Should().Be(XLBorderStyleValues.Medium);
+    }
+
+    [Fact]
+    public void Export_WithCustomHighlightOptions_AppliesCustomColorAndClasses()
+    {
+        var mermaidContent = """
+            erDiagram
+                class TblAlpha customHighlight
+                class TblBeta newTbl
+
+                TblAlpha {
+                    int ColA PK
+                }
+                TblBeta {
+                    int ColB PK
+                }
+            """;
+
+        var reader = new MermaidSchemaReader();
+        var schema = reader.Read(mermaidContent);
+
+        var options = new DictionaryExportOptions
+        {
+            DatabaseName = "CUSTOM_HIGHLIGHT_DB",
+            HighlightClasses = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "customHighlight" },
+            HighlightColor = "#e0f7fa",
+            OutputPath = Path.Combine(_tempOutputDir, "output_custom_highlight.xlsx")
+        };
+
+        var exporter = new ExcelDataDictionaryExporter();
+        exporter.Export(schema, options);
+
+        using var workbook = new XLWorkbook(options.OutputPath);
+        var ws = workbook.Worksheet("CUSTOM_HIGHLIGHT_DB");
+
+        var customColor = XLColor.FromHtml("#e0f7fa");
+
+        // Row 3: TblAlpha has "customHighlight" -> Should be highlighted with #e0f7fa
+        ws.Cell("D3").GetString().Should().Be("TblAlpha");
+        ws.Cell("D3").Style.Fill.BackgroundColor.Should().Be(customColor);
+
+        // Row 4: TblBeta has "newTbl" (which was excluded from custom HighlightClasses) -> No highlight
+        ws.Cell("D4").GetString().Should().Be("TblBeta");
+        ws.Cell("D4").Style.Fill.PatternType.Should().Be(XLFillPatternValues.None);
+    }
 }

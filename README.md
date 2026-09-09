@@ -13,7 +13,7 @@ Universal database and entity schema alignment tool for .NET. SchemaAlign parses
 - **Destructive Change Safeguards**: Protects against accidental table and column drops unless explicitly enabled with `--allow-drop`.
 - **In-place Roslyn Entity Rewriter**: Updates existing C# entity classes while preserving custom methods, comments, and formatting.
 - **Idempotent SQL Server Migration Applier**: Generates guarded T-SQL DDL migration scripts (`.sql`) and applies schema updates directly against live SQL Server databases.
-- **Excel Data Dictionary Export**: Exports Mermaid ER diagrams to styled Excel (`.xlsx`) data dictionaries with AID, database metadata, foreign key references, and table styling.
+- **Excel Data Dictionary Export**: Exports Mermaid ER diagrams to styled Excel (`.xlsx`) data dictionaries with AID, database metadata, foreign key references, table styling, and table classification background highlighting.
 
 ## CLI Usage
 
@@ -84,3 +84,5 @@ dotnet run --project SchemaAlign -- export --target ./docs/schema.mmd --output .
 - `--ip`: IP / Domain / Azure Cosmos host metadata value.
 - `--db`: SQL DB / Azure DB / Cosmos DB name metadata value.
 - `--title`: System title header value.
+
+Tables classified in Mermaid diagrams (via `class TableA newTbl` statements or `TableA:::newTbl` inline notation) matching configured highlight classes (`newTbl`, `updatedTbl` by default) receive a background row highlight (`#ffcccc` by default, configurable via `schemaalign.json`).
