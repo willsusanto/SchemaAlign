@@ -143,6 +143,102 @@ public class CommandLineParsingTests
     }
 
     [Fact]
+    public async Task SyncCommand_ParsesConfigBaseClassUsingsAndAttributesFlags()
+    {
+        SyncCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestSyncHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(syncHandler: mockHandler);
+        var exitCode = await root.Parse(new[]
+        {
+            "sync", "-c", "schema.mmd", "-t", "./Entities",
+            "--config", "custom_config.json",
+            "--base-class", "MockEntityBase",
+            "--using", "MockOrg.Core",
+            "--using", "MockOrg.Pattern",
+            "--class-attr", "[CustomGroup(\"Core\")]"
+        }).InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Current.Should().Be("schema.mmd");
+        capturedOptions.Target.Should().Be("./Entities");
+        capturedOptions.ConfigFile.Should().Be("custom_config.json");
+        capturedOptions.BaseClass.Should().Be("MockEntityBase");
+        capturedOptions.Usings.Should().Contain("MockOrg.Core");
+        capturedOptions.Usings.Should().Contain("MockOrg.Pattern");
+        capturedOptions.ClassAttributes.Should().Contain("[CustomGroup(\"Core\")]");
+    }
+
+    [Fact]
+    public async Task DiffCommand_ParsesConfigFile()
+    {
+        DiffCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestDiffHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(diffHandler: mockHandler);
+        var exitCode = await root.Parse("diff -c schema.mmd -t ./Entities --config myconfig.json").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Current.Should().Be("schema.mmd");
+        capturedOptions.Target.Should().Be("./Entities");
+        capturedOptions.ConfigFile.Should().Be("myconfig.json");
+    }
+
+    [Fact]
+    public async Task DiffCommand_AllowsOmissionOfSourceAndTarget_WhenUsingConfig()
+    {
+        DiffCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestDiffHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(diffHandler: mockHandler);
+        var exitCode = await root.Parse("diff --config myconfig.json").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Current.Should().BeEmpty();
+        capturedOptions.Target.Should().BeEmpty();
+        capturedOptions.ConfigFile.Should().Be("myconfig.json");
+    }
+
+    [Fact]
+    public async Task SyncCommand_AllowsOmissionOfSourceAndTarget_WhenUsingConfig()
+    {
+        SyncCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestSyncHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(syncHandler: mockHandler);
+        var exitCode = await root.Parse("sync --config myconfig.json").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.Current.Should().BeEmpty();
+        capturedOptions.Target.Should().BeEmpty();
+        capturedOptions.ConfigFile.Should().Be("myconfig.json");
+    }
+
+    [Fact]
     public async Task InspectCommand_ParsesCurrentAndOutput()
     {
         InspectCommandOptions? capturedOptions = null;
@@ -160,31 +256,6 @@ public class CommandLineParsingTests
         capturedOptions.Should().NotBeNull();
         capturedOptions!.Current.Should().Be("schema.mmd");
         capturedOptions.Output.Should().Be("json");
-    }
-
-    [Fact]
-    public async Task ExportCommand_ParsesAllOptionsAndAliases()
-    {
-        ExportCommandOptions? capturedOptions = null;
-
-        var mockHandler = new TestExportHandler(opts =>
-        {
-            capturedOptions = opts;
-            return Task.FromResult(0);
-        });
-
-        var root = CommandLineConfiguration.CreateRootCommand(exportHandler: mockHandler);
-        var exitCode = await root.Parse("export -t schema.mmd -o out.xlsx -c custom.json --aid 2026 --ip db.internal --db PROD_DB --title \"Custom Title\"").InvokeAsync();
-
-        exitCode.Should().Be(0);
-        capturedOptions.Should().NotBeNull();
-        capturedOptions!.Target.Should().Be("schema.mmd");
-        capturedOptions.Output.Should().Be("out.xlsx");
-        capturedOptions.Config.Should().Be("custom.json");
-        capturedOptions.Aid.Should().Be("2026");
-        capturedOptions.Ip.Should().Be("db.internal");
-        capturedOptions.Db.Should().Be("PROD_DB");
-        capturedOptions.Title.Should().Be("Custom Title");
     }
 
     [Fact]
@@ -247,12 +318,5 @@ public class CommandLineParsingTests
         private readonly Func<InspectCommandOptions, Task<int>> _action;
         public TestInspectHandler(Func<InspectCommandOptions, Task<int>> action) => _action = action;
         public override Task<int> RunAsync(InspectCommandOptions options, CancellationToken ct = default) => _action(options);
-    }
-
-    private class TestExportHandler : ExportCommandHandler
-    {
-        private readonly Func<ExportCommandOptions, Task<int>> _action;
-        public TestExportHandler(Func<ExportCommandOptions, Task<int>> action) => _action = action;
-        public override Task<int> RunAsync(ExportCommandOptions options, CancellationToken ct = default) => _action(options);
     }
 }

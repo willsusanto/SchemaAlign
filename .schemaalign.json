@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/schemaalign.json",
+  "mode": "incremental",
+  "allowDrop": false,
+  "output": "console",
+  "detailed": false,
+  "csharp": {
+    "namespace": "MyApp.Domain.Entities",
+    "baseClass": "AuditEntity",
+    "useFileScopedNamespaces": true,
+    "useDataAnnotations": true,
+    "usings": [
+      "MyApp.Domain.Common"
+    ],
+    "classAttributes": [
+      "[Table(\"CustomTable\")]"
+    ],
+    "omitInheritedColumns": [
+      "CreatedBy",
+      "CreatedAt",
+      "UpdatedBy",
+      "UpdatedAt"
+    ]
+  }
+}
