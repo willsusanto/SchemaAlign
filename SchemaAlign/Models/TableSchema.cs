@@ -8,7 +8,7 @@ public class TableSchema
     public List<ForeignKeySchema> ForeignKeys { get; set; } = new();
     public string? Comment { get; set; }
     /// <summary>
-    /// Classes assigned to the table (e.g. for diagram classification or export styling).
+    /// Classes assigned to the table (e.g. for diagram classification).
     /// </summary>
     public HashSet<string> Classes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
