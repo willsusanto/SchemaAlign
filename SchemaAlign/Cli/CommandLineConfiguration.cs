@@ -9,20 +9,18 @@ namespace SchemaAlign.Cli;
 public static class CommandLineConfiguration
 {
     /// <summary>
-    /// Creates and configures the root CLI command with diff, sync, inspect, export, and wizard commands.
+    /// Creates and configures the root CLI command with diff, sync, inspect, and wizard commands.
     /// </summary>
     /// <param name="diffHandler">Optional custom handler for the diff command.</param>
     /// <param name="syncHandler">Optional custom handler for the sync command.</param>
     /// <param name="inspectHandler">Optional custom handler for the inspect command.</param>
     /// <param name="wizardHandler">Optional custom handler for the wizard command.</param>
-    /// <param name="exportHandler">Optional custom handler for the export command.</param>
     /// <returns>A configured <see cref="RootCommand"/> ready for parsing and invocation.</returns>
     public static RootCommand CreateRootCommand(
         DiffCommandHandler? diffHandler = null,
         SyncCommandHandler? syncHandler = null,
         InspectCommandHandler? inspectHandler = null,
-        WizardCommandHandler? wizardHandler = null,
-        ExportCommandHandler? exportHandler = null)
+        WizardCommandHandler? wizardHandler = null)
     {
         var rootCommand = new RootCommand("SchemaAlign - Universal Database & Entity Schema Alignment Tool");
 
@@ -256,91 +254,16 @@ public static class CommandLineConfiguration
             return await handler.RunAsync(options);
         });
 
-        // --- export command ---
-        var exportTargetOpt = new Option<string>("--target")
-        {
-            Description = "Path to Mermaid schema file (.mmd, .mermaid)",
-            Required = true
-        };
-        exportTargetOpt.Aliases.Add("-t");
-
-        var exportOutputOpt = new Option<string>("--output")
-        {
-            Description = "Path to output Excel file (.xlsx)",
-            Required = true
-        };
-        exportOutputOpt.Aliases.Add("-o");
-
-        var exportConfigOpt = new Option<string?>("--config")
-        {
-            Description = "Optional path to schemaalign.json configuration file",
-            DefaultValueFactory = _ => null
-        };
-        exportConfigOpt.Aliases.Add("-c");
-
-        var exportAidOpt = new Option<string?>("--aid")
-        {
-            Description = "Application ID (AID) metadata value",
-            DefaultValueFactory = _ => null
-        };
-
-        var exportIpOpt = new Option<string?>("--ip")
-        {
-            Description = "IP / Domain / Azure Cosmos host metadata value",
-            DefaultValueFactory = _ => null
-        };
-
-        var exportDbOpt = new Option<string?>("--db")
-        {
-            Description = "SQL DB / Azure DB / Cosmos DB name metadata value",
-            DefaultValueFactory = _ => null
-        };
-
-        var exportTitleOpt = new Option<string?>("--title")
-        {
-            Description = "System title header value",
-            DefaultValueFactory = _ => null
-        };
-
-        var exportCommand = new Command("export", "Export Mermaid schema to Excel Data Dictionary (.xlsx)")
-        {
-            exportTargetOpt,
-            exportOutputOpt,
-            exportConfigOpt,
-            exportAidOpt,
-            exportIpOpt,
-            exportDbOpt,
-            exportTitleOpt
-        };
-
-        exportCommand.SetAction(async parseResult =>
-        {
-            var handler = exportHandler ?? new ExportCommandHandler();
-            var options = new ExportCommandOptions
-            {
-                Target = parseResult.GetValue(exportTargetOpt) ?? string.Empty,
-                Output = parseResult.GetValue(exportOutputOpt) ?? string.Empty,
-                Config = parseResult.GetValue(exportConfigOpt),
-                Aid = parseResult.GetValue(exportAidOpt),
-                Ip = parseResult.GetValue(exportIpOpt),
-                Db = parseResult.GetValue(exportDbOpt),
-                Title = parseResult.GetValue(exportTitleOpt)
-            };
-            return await handler.RunAsync(options);
-        });
-
         rootCommand.Add(diffCommand);
         rootCommand.Add(syncCommand);
         rootCommand.Add(inspectCommand);
-        rootCommand.Add(exportCommand);
 
         rootCommand.SetAction(async parseResult =>
         {
             var wizard = wizardHandler ?? new WizardCommandHandler(
                 diffHandler: diffHandler,
                 syncHandler: syncHandler,
-                inspectHandler: inspectHandler,
-                exportHandler: exportHandler);
+                inspectHandler: inspectHandler);
             return await wizard.RunAsync();
         });
 

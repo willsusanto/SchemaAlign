@@ -48,11 +48,6 @@ public class SchemaAlignConfiguration
     /// C# entity generation and applier specific configurations.
     /// </summary>
     public CSharpConfiguration CSharp { get; set; } = new();
-
-    /// <summary>
-    /// Excel data dictionary export configurations.
-    /// </summary>
-    public DictionaryConfiguration Dictionary { get; set; } = new();
 }
 
 /// <summary>
@@ -94,61 +89,4 @@ public class CSharpConfiguration
     /// Whether to generate DataAnnotation attributes ([Key], [Column], [Table], etc.).
     /// </summary>
     public bool? UseDataAnnotations { get; set; }
-}
-
-/// <summary>
-/// Configuration settings for exporting schemas to an Excel data dictionary.
-/// </summary>
-public class DictionaryConfiguration
-{
-    /// <summary>
-    /// Application ID (AID) metadata value.
-    /// </summary>
-    public string? Aid { get; set; }
-
-    /// <summary>
-    /// IP / Domain / Host metadata value.
-    /// </summary>
-    public string? Ip { get; set; }
-
-    /// <summary>
-    /// Database name metadata value.
-    /// </summary>
-    public string? Database { get; set; }
-
-    /// <summary>
-    /// System title header value.
-    /// </summary>
-    public string? SystemTitle { get; set; }
-
-    /// <summary>
-    /// Set of table class names to highlight with a background color in the export.
-    /// </summary>
-    public List<string>? HighlightClasses { get; set; }
-
-    /// <summary>
-    /// Hex color code for the background highlight of matching classified tables.
-    /// </summary>
-    public string? HighlightColor { get; set; }
-
-    /// <summary>
-    /// Default notes and sample data mapped by column name (case-insensitive).
-    /// </summary>
-    public Dictionary<string, DictionaryColumnDefault> ColumnDefaults { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-}
-
-/// <summary>
-/// Pre-configured notes and sample data for specific column names in exported data dictionaries.
-/// </summary>
-public class DictionaryColumnDefault
-{
-    /// <summary>
-    /// Description or notes for the column.
-    /// </summary>
-    public string? Notes { get; set; }
-
-    /// <summary>
-    /// Sample data value for the column.
-    /// </summary>
-    public string? Sample { get; set; }
 }

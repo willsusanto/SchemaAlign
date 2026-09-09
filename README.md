@@ -13,8 +13,7 @@ Universal database and entity schema alignment tool for .NET. SchemaAlign parses
 - **Destructive Change Safeguards**: Protects against accidental table and column drops unless explicitly enabled with `--allow-drop`.
 - **In-place Roslyn Entity Rewriter**: Updates existing C# entity classes while preserving custom methods, comments, and formatting.
 - **Idempotent SQL Server Migration Applier**: Generates guarded T-SQL DDL migration scripts (`.sql`) and applies schema updates directly against live SQL Server databases.
-- **Excel Data Dictionary Export**: Exports Mermaid ER diagrams to styled Excel (`.xlsx`) data dictionaries with configurable metadata, foreign key references, table styling, and table classification background highlighting.
-- **Configuration & Conventions**: Supports `.schemaalign.json` configuration files with directory hierarchy traversal, custom base classes with auto-inherited property omission, custom class attributes, extra using directives, and configurable dictionary column defaults.
+- **Configuration & Conventions**: Supports `.schemaalign.json` configuration files with directory hierarchy traversal, custom base classes with auto-inherited property omission, custom class attributes, and extra using directives.
 
 ## CLI Usage
 
@@ -75,24 +74,6 @@ dotnet run --project SchemaAlign -- inspect --current ./docs/schema.mmd
 - `-c`, `--current` *(required)*: Path to schema file or directory to inspect (supports semicolon/comma-separated multi-paths).
 - `-o`, `--output`: Output format (`console` [default] or `json`).
 
-#### `export`
-Export Mermaid schema to an Excel Data Dictionary (`.xlsx`):
-
-```bash
-dotnet run --project SchemaAlign -- export --target ./docs/schema.mmd --output ./docs/dictionary.xlsx
-```
-
-**Options**:
-- `-t`, `--target` *(required)*: Path to Mermaid schema file (`.mmd`, `.mermaid`).
-- `-o`, `--output` *(required)*: Path to output Excel file (`.xlsx`).
-- `-c`, `--config`: Optional path to `.schemaalign.json` configuration file.
-- `--aid`: Application ID (AID) metadata value.
-- `--ip`: IP / Domain / Azure Cosmos host metadata value.
-- `--db`: SQL DB / Azure DB / Cosmos DB name metadata value.
-- `--title`: System title header value.
-
-Tables classified in Mermaid diagrams (via `class TableA newTbl` statements or `TableA:::newTbl` inline notation) matching configured highlight classes (`newTbl`, `updatedTbl` by default) receive a background row highlight (`#ffcccc` by default, configurable via `.schemaalign.json`).
-
 ## Configuration (`.schemaalign.json`)
 
 SchemaAlign automatically discovers `.schemaalign.json` (or `schemaalign.json`) by searching upward from the current working directory to the repository root. You can also specify an explicit configuration file using the `--config` option on `diff` and `sync`.
@@ -123,26 +104,6 @@ SchemaAlign automatically discovers `.schemaalign.json` (or `schemaalign.json`) 
       "UpdatedBy",
       "UpdatedAt"
     ]
-  },
-  "dictionary": {
-    "aid": "APP-001",
-    "ip": "db.internal.domain",
-    "database": "MAIN_DB",
-    "systemTitle": "Main System",
-    "columnDefaults": {
-      "status": {
-        "notes": "Record status indicator",
-        "sample": "ACTIVE"
-      },
-      "created_by": {
-        "notes": "User ID who created the record",
-        "sample": "usr_123"
-      },
-      "created_at": {
-        "notes": "Timestamp when record was created",
-        "sample": "2026-01-01 00:00:00"
-      }
-    }
   }
 }
 ```

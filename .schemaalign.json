@@ -5,51 +5,21 @@
   "output": "console",
   "detailed": false,
   "csharp": {
-    "namespace": "NewSchoolLibrary.API.Model.LibraryDB",
+    "namespace": "MyApp.Domain.Entities",
     "baseClass": "AuditEntity",
     "useFileScopedNamespaces": true,
     "useDataAnnotations": true,
     "usings": [
-      "Binus.WS.Pattern.Model",
-      "NewSchoolLibrary.API.Model.Base"
+      "MyApp.Domain.Common"
     ],
     "classAttributes": [
-      "[DatabaseName(\"LibraryDB\")]"
+      "[Table(\"CustomTable\")]"
     ],
     "omitInheritedColumns": [
-      "UserIn",
-      "DateIn",
-      "UserUp",
-      "DateUp",
-      "Stsrc"
+      "CreatedBy",
+      "CreatedAt",
+      "UpdatedBy",
+      "UpdatedAt"
     ]
-  },
-  "dictionary": {
-    "aid": "1191",
-    "ip": "ssg5-newlibrary-dev.binus.db",
-    "database": "LIBRARY_DB",
-    "systemTitle": "New Library System",
-    "columnDefaults": {
-      "stsrc": {
-        "notes": "Status record data",
-        "sample": "0.1"
-      },
-      "userin": {
-        "notes": "User yang melakukan input data",
-        "sample": "GUID"
-      },
-      "datein": {
-        "notes": "Tanggal data di input",
-        "sample": "2026-01-22 09:25:18.8933333"
-      },
-      "userup": {
-        "notes": "User yang melakukan update data",
-        "sample": "GUID"
-      },
-      "dateup": {
-        "notes": "Tanggal data di update",
-        "sample": "2026-01-22 09:25:18.8933333"
-      }
-    }
   }
 }
