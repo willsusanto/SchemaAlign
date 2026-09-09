@@ -11,25 +11,10 @@ namespace SchemaAlign.Cli.Commands;
 /// </summary>
 public class DiffCommandOptions
 {
-    private string _current = string.Empty;
-
     /// <summary>
     /// Path to current/base schema.
     /// </summary>
-    public string Current
-    {
-        get => _current;
-        set => _current = value;
-    }
-
-    /// <summary>
-    /// Backward-compatible alias for Current.
-    /// </summary>
-    public string Source
-    {
-        get => _current;
-        set => _current = value;
-    }
+    public string Current { get; set; } = string.Empty;
 
     /// <summary>
     /// Path to desired/target schema.

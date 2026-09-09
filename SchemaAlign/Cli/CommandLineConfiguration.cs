@@ -33,10 +33,6 @@ public static class CommandLineConfiguration
             Required = true
         };
         diffCurrentOpt.Aliases.Add("-c");
-        diffCurrentOpt.Aliases.Add("--base");
-        diffCurrentOpt.Aliases.Add("--from");
-        diffCurrentOpt.Aliases.Add("-s");
-        diffCurrentOpt.Aliases.Add("--source");
 
         var diffTargetOpt = new Option<string>("--target")
         {
@@ -44,8 +40,6 @@ public static class CommandLineConfiguration
             Required = true
         };
         diffTargetOpt.Aliases.Add("-t");
-        diffTargetOpt.Aliases.Add("--desired");
-        diffTargetOpt.Aliases.Add("--to");
 
         var diffModeOpt = new Option<string>("--mode")
         {
@@ -97,10 +91,6 @@ public static class CommandLineConfiguration
             Required = true
         };
         syncCurrentOpt.Aliases.Add("-c");
-        syncCurrentOpt.Aliases.Add("--base");
-        syncCurrentOpt.Aliases.Add("--from");
-        syncCurrentOpt.Aliases.Add("-s");
-        syncCurrentOpt.Aliases.Add("--source");
 
         var syncTargetOpt = new Option<string>("--target")
         {
@@ -108,8 +98,6 @@ public static class CommandLineConfiguration
             Required = true
         };
         syncTargetOpt.Aliases.Add("-t");
-        syncTargetOpt.Aliases.Add("--desired");
-        syncTargetOpt.Aliases.Add("--to");
 
         var syncOutputFileOpt = new Option<string?>("--output-file")
         {
@@ -117,8 +105,6 @@ public static class CommandLineConfiguration
             DefaultValueFactory = _ => null
         };
         syncOutputFileOpt.Aliases.Add("-o");
-        syncOutputFileOpt.Aliases.Add("--out");
-        syncOutputFileOpt.Aliases.Add("--script-out");
 
         var syncModeOpt = new Option<string>("--mode")
         {
@@ -204,13 +190,12 @@ public static class CommandLineConfiguration
         });
 
         // --- inspect command ---
-        var inspectSourceOpt = new Option<string>("--source")
+        var inspectCurrentOpt = new Option<string>("--current")
         {
             Description = "Path to schema file or directory to inspect",
             Required = true
         };
-        inspectSourceOpt.Aliases.Add("-s");
-        inspectSourceOpt.Aliases.Add("--from");
+        inspectCurrentOpt.Aliases.Add("-c");
 
         var inspectOutputOpt = new Option<string>("--output")
         {
@@ -221,7 +206,7 @@ public static class CommandLineConfiguration
 
         var inspectCommand = new Command("inspect", "Inspect and display parsed schema tables and columns")
         {
-            inspectSourceOpt,
+            inspectCurrentOpt,
             inspectOutputOpt
         };
 
@@ -230,20 +215,19 @@ public static class CommandLineConfiguration
             var handler = inspectHandler ?? new InspectCommandHandler();
             var options = new InspectCommandOptions
             {
-                Source = parseResult.GetValue(inspectSourceOpt) ?? string.Empty,
+                Current = parseResult.GetValue(inspectCurrentOpt) ?? string.Empty,
                 Output = parseResult.GetValue(inspectOutputOpt) ?? "console"
             };
             return await handler.RunAsync(options);
         });
 
         // --- export command ---
-        var exportSourceOpt = new Option<string>("--source")
+        var exportTargetOpt = new Option<string>("--target")
         {
             Description = "Path to Mermaid schema file (.mmd, .mermaid)",
             Required = true
         };
-        exportSourceOpt.Aliases.Add("-s");
-        exportSourceOpt.Aliases.Add("--from");
+        exportTargetOpt.Aliases.Add("-t");
 
         var exportOutputOpt = new Option<string>("--output")
         {
@@ -285,7 +269,7 @@ public static class CommandLineConfiguration
 
         var exportCommand = new Command("export", "Export Mermaid schema to Excel Data Dictionary (.xlsx)")
         {
-            exportSourceOpt,
+            exportTargetOpt,
             exportOutputOpt,
             exportConfigOpt,
             exportAidOpt,
@@ -299,7 +283,7 @@ public static class CommandLineConfiguration
             var handler = exportHandler ?? new ExportCommandHandler();
             var options = new ExportCommandOptions
             {
-                Source = parseResult.GetValue(exportSourceOpt) ?? string.Empty,
+                Target = parseResult.GetValue(exportTargetOpt) ?? string.Empty,
                 Output = parseResult.GetValue(exportOutputOpt) ?? string.Empty,
                 Config = parseResult.GetValue(exportConfigOpt),
                 Aid = parseResult.GetValue(exportAidOpt),

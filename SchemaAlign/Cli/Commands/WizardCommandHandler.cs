@@ -56,15 +56,15 @@ public class WizardCommandHandler
 
         if (action.StartsWith("4"))
         {
-            var source = _console.Ask<string>("[bold]Enter Mermaid schema path (e.g. schema.mmd):[/]");
+            var target = _console.Ask<string>("[bold]Enter Mermaid schema path (e.g. schema.mmd):[/]");
             var output = _console.Ask<string>("[bold]Enter output Excel file path (e.g. dictionary.xlsx):[/]");
-            return await _exportHandler.RunAsync(new ExportCommandOptions { Source = source, Output = output }, cancellationToken);
+            return await _exportHandler.RunAsync(new ExportCommandOptions { Target = target, Output = output }, cancellationToken);
         }
 
         if (action.StartsWith("3"))
         {
-            var source = _console.Ask<string>("[bold]Enter schema path (e.g. schema.mmd, ./Entities, or script.sql):[/]");
-            return await _inspectHandler.RunAsync(new InspectCommandOptions { Source = source }, cancellationToken);
+            var current = _console.Ask<string>("[bold]Enter schema path (e.g. schema.mmd, ./Entities, or script.sql):[/]");
+            return await _inspectHandler.RunAsync(new InspectCommandOptions { Current = current }, cancellationToken);
         }
 
         var currentPath = _console.Ask<string>("[bold]Enter Current schema path (e.g. ./src/Entities or live DB):[/]");

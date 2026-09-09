@@ -14,25 +14,10 @@ namespace SchemaAlign.Cli.Commands;
 /// </summary>
 public class SyncCommandOptions
 {
-    private string _current = string.Empty;
-
     /// <summary>
     /// Path to current/base schema to be updated.
     /// </summary>
-    public string Current
-    {
-        get => _current;
-        set => _current = value;
-    }
-
-    /// <summary>
-    /// Backward-compatible alias for Current.
-    /// </summary>
-    public string Source
-    {
-        get => _current;
-        set => _current = value;
-    }
+    public string Current { get; set; } = string.Empty;
 
     /// <summary>
     /// Path to desired/target schema to align toward.

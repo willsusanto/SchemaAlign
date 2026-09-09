@@ -54,14 +54,14 @@ public class SyncWorkflowTests
 
         var sourceSchema = new DatabaseSchema(); // Current base
         var targetSchema = new DatabaseSchema(); // Desired spec
-        var newTable = new TableSchema { Name = "CustomerTable" };
+        var newTable = new TableSchema { Name = "tbl_masked_customer" };
         newTable.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
         targetSchema.AddTable(newTable);
 
         var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
         var options = new SyncCommandOptions
         {
-            Source = "Entities",
+            Current = "Entities",
             Target = "schema.mmd",
             DryRun = true,
             Yes = true,
@@ -84,17 +84,17 @@ public class SyncWorkflowTests
         registry.Register(TargetType.CSharp, mockApplier);
 
         var sourceSchema = new DatabaseSchema(); // Current base with old table
-        var oldTable = new TableSchema { Name = "OldAuditTable" };
+        var oldTable = new TableSchema { Name = "tbl_masked_audit" };
         sourceSchema.AddTable(oldTable);
 
         var targetSchema = new DatabaseSchema(); // Desired spec with new table
-        var newTable = new TableSchema { Name = "NewTable" };
+        var newTable = new TableSchema { Name = "tbl_masked_new" };
         targetSchema.AddTable(newTable);
 
         var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
         var options = new SyncCommandOptions
         {
-            Source = "Entities",
+            Current = "Entities",
             Target = "schema.mmd",
             Mode = "snapshot",
             AllowDrop = false,
@@ -109,7 +109,7 @@ public class SyncWorkflowTests
         mockApplier.ApplyCalled.Should().BeTrue();
         mockApplier.LastDiffApplied.Should().NotBeNull();
         mockApplier.LastDiffApplied!.DeletedTables.Should().BeEmpty();
-        mockApplier.LastDiffApplied!.AddedTables.Should().ContainSingle(t => t.TableName == "NewTable");
+        mockApplier.LastDiffApplied!.AddedTables.Should().ContainSingle(t => t.TableName == "tbl_masked_new");
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class SyncWorkflowTests
 
             var sourceSchema = new DatabaseSchema();
             var targetSchema = new DatabaseSchema();
-            var newTable = new TableSchema { Name = "Orders" };
+            var newTable = new TableSchema { Name = "tbl_masked_orders" };
             newTable.AddColumn(new ColumnSchema { Name = "OrderId", Type = StandardType.BigInt, IsPrimaryKey = true, IsIdentity = true });
             targetSchema.AddTable(newTable);
 
@@ -132,7 +132,7 @@ public class SyncWorkflowTests
             var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
             var options = new SyncCommandOptions
             {
-                Source = sqlFile,
+                Current = sqlFile,
                 Target = "schema.mmd",
                 DryRun = false,
                 Yes = true,
@@ -144,7 +144,7 @@ public class SyncWorkflowTests
             exitCode.Should().Be(0);
             File.Exists(sqlFile).Should().BeTrue();
             var content = await File.ReadAllTextAsync(sqlFile);
-            content.Should().Contain("CREATE TABLE [dbo].[Orders]");
+            content.Should().Contain("CREATE TABLE [dbo].[tbl_masked_orders]");
             content.Should().Contain("[OrderId] BIGINT IDENTITY(1,1) NOT NULL");
         }
         finally
