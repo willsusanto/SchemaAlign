@@ -13,7 +13,7 @@ Universal database and entity schema alignment tool for .NET. SchemaAlign parses
 - **Destructive Change Safeguards**: Protects against accidental table and column drops unless explicitly enabled with `--allow-drop`.
 - **In-place Roslyn Entity Rewriter**: Updates existing C# entity classes while preserving custom methods, comments, and formatting.
 - **Idempotent SQL Server Migration Applier**: Generates guarded T-SQL DDL migration scripts (`.sql`) and applies schema updates directly against live SQL Server databases.
-- **Configuration & Conventions**: Supports `.schemaalign.json` configuration files with directory hierarchy traversal, custom base classes with auto-inherited property omission, custom class attributes, and extra using directives.
+- **Configuration & Conventions**: Supports `.schemaalign.json` configuration files with directory hierarchy traversal, configurable Foreign Key placement (`scalar` vs `navigation`), table prefix stripping (configured and automatic), custom base classes with auto-inherited property omission, custom class attributes, and extra using directives.
 
 ## CLI Usage
 
@@ -38,6 +38,7 @@ dotnet run --project SchemaAlign -- diff --current ./src/Entities --target ./doc
 - `-m`, `--mode`: Diff mode (`incremental` [default] or `snapshot`).
 - `-o`, `--output`: Output format (`console` [default], `json`, `markdown`).
 - `--detailed`: Display detailed property-level change tree (types, nullability, lengths).
+- `--table-prefix`: Known table prefix to strip when matching foreign key columns (can be specified multiple times). Aliases: `--table-prefixes`.
 - `--config`: Path to `.schemaalign.json` configuration file.
 
 #### `sync`
@@ -62,6 +63,8 @@ dotnet run --project SchemaAlign -- sync --current ./src/Entities --target ./doc
 - `--base-class`: Base class for newly generated C# entity classes (e.g. `AuditEntity`).
 - `--using`: Additional using namespace directives to add to generated entity files (can be specified multiple times).
 - `--class-attribute`: Custom class-level attributes to emit on generated entity classes (can be specified multiple times). Aliases: `--class-attr`.
+- `--foreign-key-placement`: Placement of the `[ForeignKey]` data annotation attribute (`scalar` or `navigation` [default]). Aliases: `--fk-placement`.
+- `--table-prefix`: Table prefixes to strip when matching foreign key columns and generating navigation properties (can be specified multiple times). Aliases: `--table-prefixes`.
 
 #### `inspect`
 Inspect and display parsed tables, columns, and foreign keys from a schema source:
@@ -86,11 +89,21 @@ SchemaAlign automatically discovers `.schemaalign.json` (or `schemaalign.json`) 
   "allowDrop": false,
   "output": "console",
   "detailed": false,
+  "tablePrefixes": [
+    "tbl_",
+    "px_"
+  ],
   "csharp": {
     "namespace": "MyApp.Domain.Entities",
     "baseClass": "AuditEntity",
     "useFileScopedNamespaces": true,
     "useDataAnnotations": true,
+    "foreignKeyPlacement": "scalar",
+    "tablePrefixes": [
+      "ms",
+      "lt",
+      "tr"
+    ],
     "usings": [
       "MyApp.Domain.Common",
       "MyApp.Infrastructure.Attributes"
@@ -115,3 +128,12 @@ When `baseClass` is configured (via `.schemaalign.json` or `--base-class`), Sche
 - Analyzes existing source files to discover all properties declared across the base class inheritance hierarchy and automatically omits duplicate column declarations in newly generated entity classes.
 - Automatically resolves and imports the namespace containing the base class if it resides in a different namespace.
 - Supports explicit property omissions via `omitInheritedColumns`.
+
+### Foreign Key Placement & Table Prefixes
+
+- **Foreign Key Placement (`foreignKeyPlacement` / `--foreign-key-placement`)**:
+  - `navigation` (default): Emits `[ForeignKey("ScalarPropId")]` on the navigation property.
+  - `scalar`: Emits `[ForeignKey("NavigationProp")]` on the scalar foreign key property and omits `[ForeignKey]` from the navigation property.
+- **Table Prefix Stripping (`tablePrefixes` / `--table-prefix`)**:
+  - Strips configured prefixes (e.g. `tbl_`, `ms`, `lt`, `tr`) when matching foreign key candidate columns in Mermaid diagrams and generating navigation property names.
+  - Automatically detects 2-character PascalCase prefixes (such as `MsAuthor` or `LtBook`) during foreign key column resolution.

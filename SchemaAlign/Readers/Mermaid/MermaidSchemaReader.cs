@@ -29,6 +29,10 @@ public class MermaidSchemaReader : ISchemaReader
     /// </summary>
     public MermaidReaderOptions Options { get; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MermaidSchemaReader"/> class.
+    /// </summary>
+    /// <param name="options">Optional Mermaid reader configuration options.</param>
     public MermaidSchemaReader(MermaidReaderOptions? options = null)
     {
         Options = options ?? new MermaidReaderOptions();

@@ -15,6 +15,7 @@ public class SchemaDetectionService
     /// Detects and returns an appropriate <see cref="ISchemaReader"/> for the given path, multi-path string, or connection string.
     /// </summary>
     /// <param name="pathOrConnectionString">The file path, directory, semicolon/comma-separated multi-path, or database connection string.</param>
+    /// <param name="mermaidOptions">Optional Mermaid reader configuration options (e.g. TablePrefixes).</param>
     /// <returns>A schema reader instance capable of parsing the source.</returns>
     /// <exception cref="ArgumentException">Thrown when the input path or connection string is empty.</exception>
     /// <exception cref="NotSupportedException">Thrown when the format is unsupported or the required reader is unavailable.</exception>
