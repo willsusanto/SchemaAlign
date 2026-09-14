@@ -25,6 +25,20 @@ public class MermaidSchemaReader : ISchemaReader
         RegexOptions.Compiled);
 
     /// <summary>
+    /// Gets the configuration options for this reader.
+    /// </summary>
+    public MermaidReaderOptions Options { get; }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MermaidSchemaReader"/> class.
+    /// </summary>
+    /// <param name="options">Optional Mermaid reader configuration options.</param>
+    public MermaidSchemaReader(MermaidReaderOptions? options = null)
+    {
+        Options = options ?? new MermaidReaderOptions();
+    }
+
+    /// <summary>
     /// Reads and parses a database schema from Mermaid ER diagram text content.
     /// </summary>
     /// <param name="content">The Mermaid ER diagram text content.</param>
@@ -40,6 +54,7 @@ public class MermaidSchemaReader : ISchemaReader
         var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
         var inFrontmatter = false;
         TableSchema? currentTable = null;
+        var relationshipMatches = new List<Match>();
 
         for (var i = 0; i < lines.Length; i++)
         {
@@ -186,9 +201,14 @@ public class MermaidSchemaReader : ISchemaReader
             var relMatch = RelationshipRegex.Match(rawLine);
             if (relMatch.Success)
             {
-                ParseRelationshipLine(relMatch, schema);
+                relationshipMatches.Add(relMatch);
                 continue;
             }
+        }
+
+        foreach (var match in relationshipMatches)
+        {
+            ParseRelationshipLine(match, schema);
         }
 
         return schema;
@@ -360,7 +380,7 @@ public class MermaidSchemaReader : ISchemaReader
         comment = string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
-    private static void ParseRelationshipLine(Match relMatch, DatabaseSchema schema)
+    private void ParseRelationshipLine(Match relMatch, DatabaseSchema schema)
     {
         var entity1Raw = relMatch.Groups[1].Value;
         var card1 = relMatch.Groups[2].Value;
@@ -417,7 +437,7 @@ public class MermaidSchemaReader : ISchemaReader
         }
 
         var principalCol = principalTable.PrimaryKeys.FirstOrDefault() ?? "Id";
-        var dependentCol = FindDependentColumn(dependentTable, principalTable, label);
+        var dependentCol = FindDependentColumn(dependentTable, principalTable, label, Options.TablePrefixes);
 
         var constraintName = !string.IsNullOrWhiteSpace(label) && label.StartsWith("FK_", StringComparison.OrdinalIgnoreCase)
             ? label
@@ -436,7 +456,11 @@ public class MermaidSchemaReader : ISchemaReader
         dependentTable.AddForeignKey(fk);
     }
 
-    private static string FindDependentColumn(TableSchema dependentTable, TableSchema principalTable, string? label = null)
+    private static string FindDependentColumn(
+        TableSchema dependentTable,
+        TableSchema principalTable,
+        string? label = null,
+        IReadOnlyList<string>? tablePrefixes = null)
     {
         // 1. Explicit relationship label matching column name in dependent table
         if (!string.IsNullOrWhiteSpace(label))
@@ -474,8 +498,8 @@ public class MermaidSchemaReader : ISchemaReader
         }
 
         // 3. Suffix & Prefix Candidates based on Principal Table Name
-        var singularPrincipal = principalTable.Name.TrimEnd('s', 'S');
-        var candidates = new[]
+        var singularPrincipal = Singularize(principalTable.Name);
+        var candidates = new List<string>
         {
             // Suffix
             $"{principalTable.Name}Id",
@@ -495,6 +519,49 @@ public class MermaidSchemaReader : ISchemaReader
             $"id_{singularPrincipal.ToLowerInvariant()}",
             $"id{principalTable.Name.ToLowerInvariant()}"
         };
+
+        // Table prefix stripping
+        var prefixesToCheck = new List<string>();
+        if (tablePrefixes != null)
+        {
+            prefixesToCheck.AddRange(tablePrefixes);
+        }
+        if (principalTable.Name.Length > 3 &&
+            char.IsUpper(principalTable.Name[0]) &&
+            char.IsLower(principalTable.Name[1]) &&
+            char.IsUpper(principalTable.Name[2]))
+        {
+            var autoPrefix = principalTable.Name.Substring(0, 2);
+            if (!prefixesToCheck.Contains(autoPrefix, StringComparer.OrdinalIgnoreCase))
+            {
+                prefixesToCheck.Add(autoPrefix);
+            }
+        }
+
+        foreach (var prefix in prefixesToCheck)
+        {
+            if (principalTable.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                principalTable.Name.Length > prefix.Length)
+            {
+                var stripped = principalTable.Name.Substring(prefix.Length).TrimStart('_');
+                var singularStripped = Singularize(stripped);
+
+                candidates.Add($"Id{stripped}");
+                candidates.Add($"Id{singularStripped}");
+                candidates.Add($"Id_{stripped}");
+                candidates.Add($"Id_{singularStripped}");
+                candidates.Add($"{stripped}Id");
+                candidates.Add($"{singularStripped}Id");
+                candidates.Add($"{stripped}_Id");
+                candidates.Add($"{singularStripped}_Id");
+                candidates.Add($"id_{stripped.ToLowerInvariant()}");
+                candidates.Add($"id_{singularStripped.ToLowerInvariant()}");
+                candidates.Add($"{stripped.ToLowerInvariant()}_id");
+                candidates.Add($"{singularStripped.ToLowerInvariant()}_id");
+                candidates.Add($"id{stripped.ToLowerInvariant()}");
+                candidates.Add($"{stripped.ToLowerInvariant()}id");
+            }
+        }
 
         foreach (var candidate in candidates)
         {
@@ -522,6 +589,45 @@ public class MermaidSchemaReader : ISchemaReader
         }
 
         return $"{singularPrincipal}Id";
+    }
+
+    private static string Singularize(string word)
+    {
+        if (string.IsNullOrWhiteSpace(word) || word.Length <= 2)
+        {
+            return word;
+        }
+
+        var lower = word.ToLowerInvariant();
+        if (lower.EndsWith("status") || lower.EndsWith("series") || lower.EndsWith("species") || lower.EndsWith("news"))
+        {
+            return word;
+        }
+
+        if (word.EndsWith("ies", StringComparison.OrdinalIgnoreCase) && word.Length > 3)
+        {
+            return word.Substring(0, word.Length - 3) + "y";
+        }
+
+        if ((word.EndsWith("sses", StringComparison.OrdinalIgnoreCase) ||
+             word.EndsWith("shes", StringComparison.OrdinalIgnoreCase) ||
+             word.EndsWith("ches", StringComparison.OrdinalIgnoreCase) ||
+             word.EndsWith("xes", StringComparison.OrdinalIgnoreCase) ||
+             word.EndsWith("zes", StringComparison.OrdinalIgnoreCase)) && word.Length > 4)
+        {
+            return word.Substring(0, word.Length - 2);
+        }
+
+        if (word.EndsWith("s", StringComparison.OrdinalIgnoreCase) &&
+            !word.EndsWith("ss", StringComparison.OrdinalIgnoreCase) &&
+            !word.EndsWith("us", StringComparison.OrdinalIgnoreCase) &&
+            !word.EndsWith("is", StringComparison.OrdinalIgnoreCase) &&
+            !word.EndsWith("as", StringComparison.OrdinalIgnoreCase))
+        {
+            return word.Substring(0, word.Length - 1);
+        }
+
+        return word;
     }
 
     private static bool IsOneCardinality(string card)

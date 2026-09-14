@@ -127,5 +127,26 @@ public class ConfigurationLoaderTests
             }
         }
     }
+
+    [Fact]
+    public void ParseJson_WithForeignKeyPlacementAndTablePrefixes_ParsesCorrectly()
+    {
+        var json = """
+            {
+              "tablePrefixes": ["tbl_", "px_"],
+              "csharp": {
+                "foreignKeyPlacement": "scalar",
+                "tablePrefixes": ["mock_"]
+              }
+            }
+            """;
+
+        var config = ConfigurationLoader.Parse(json);
+
+        config.Should().NotBeNull();
+        config.TablePrefixes.Should().ContainInOrder("tbl_", "px_");
+        config.CSharp.ForeignKeyPlacement.Should().Be("scalar");
+        config.CSharp.TablePrefixes.Should().Contain("mock_");
+    }
 }
 

@@ -3,6 +3,7 @@ using SchemaAlign.Cli.Services;
 using SchemaAlign.Configuration;
 using SchemaAlign.Diff;
 using SchemaAlign.Models;
+using SchemaAlign.Readers.Mermaid;
 using Spectre.Console;
 
 namespace SchemaAlign.Cli.Commands;
@@ -41,6 +42,11 @@ public class DiffCommandOptions
     /// Optional path to .schemaalign.json configuration file.
     /// </summary>
     public string? ConfigFile { get; set; }
+
+    /// <summary>
+    /// Table prefixes to strip when matching foreign key columns (e.g. "ms", "lt", "tr").
+    /// </summary>
+    public List<string> TablePrefixes { get; set; } = new();
 }
 
 /// <summary>
@@ -82,6 +88,14 @@ public class DiffCommandHandler
                 options.Output = config.Output;
             if (!options.Detailed && config.Detailed.HasValue)
                 options.Detailed = config.Detailed.Value;
+
+            var configPrefixes = (config.TablePrefixes ?? Enumerable.Empty<string>())
+                .Concat(config.CSharp?.TablePrefixes ?? Enumerable.Empty<string>());
+            foreach (var p in configPrefixes)
+            {
+                if (!options.TablePrefixes.Contains(p, StringComparer.OrdinalIgnoreCase))
+                    options.TablePrefixes.Add(p);
+            }
         }
 
         if (string.IsNullOrWhiteSpace(options.Current))
@@ -98,8 +112,12 @@ public class DiffCommandHandler
 
         try
         {
-            var currentSchema = await _detectionService.ReadSchemaAsync(options.Current, cancellationToken);
-            var targetSchema = await _detectionService.ReadSchemaAsync(options.Target, cancellationToken);
+            var mermaidOptions = options.TablePrefixes.Count > 0
+                ? new MermaidReaderOptions { TablePrefixes = options.TablePrefixes.ToList() }
+                : null;
+
+            var currentSchema = await _detectionService.ReadSchemaAsync(options.Current, mermaidOptions, cancellationToken);
+            var targetSchema = await _detectionService.ReadSchemaAsync(options.Target, mermaidOptions, cancellationToken);
 
             return Execute(currentSchema, targetSchema, options);
         }

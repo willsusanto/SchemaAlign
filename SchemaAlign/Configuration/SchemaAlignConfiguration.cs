@@ -45,6 +45,11 @@ public class SchemaAlignConfiguration
     public bool? Detailed { get; set; }
 
     /// <summary>
+    /// Table prefixes to strip when matching foreign key columns and deriving navigation property names (e.g. ["ms", "lt", "tr"] or ["tbl_"]).
+    /// </summary>
+    public List<string> TablePrefixes { get; set; } = new();
+
+    /// <summary>
     /// C# entity generation and applier specific configurations.
     /// </summary>
     public CSharpConfiguration CSharp { get; set; } = new();
@@ -89,4 +94,14 @@ public class CSharpConfiguration
     /// Whether to generate DataAnnotation attributes ([Key], [Column], [Table], etc.).
     /// </summary>
     public bool? UseDataAnnotations { get; set; }
+
+    /// <summary>
+    /// Placement of the [ForeignKey] data annotation attribute ('scalar' or 'navigation').
+    /// </summary>
+    public string? ForeignKeyPlacement { get; set; }
+
+    /// <summary>
+    /// Table prefixes to strip when matching foreign key columns and deriving navigation property names (e.g. ["ms", "lt", "tr"] or ["tbl_"]).
+    /// </summary>
+    public List<string> TablePrefixes { get; set; } = new();
 }

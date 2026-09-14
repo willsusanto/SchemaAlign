@@ -15,10 +15,11 @@ public class SchemaDetectionService
     /// Detects and returns an appropriate <see cref="ISchemaReader"/> for the given path, multi-path string, or connection string.
     /// </summary>
     /// <param name="pathOrConnectionString">The file path, directory, semicolon/comma-separated multi-path, or database connection string.</param>
+    /// <param name="mermaidOptions">Optional Mermaid reader configuration options (e.g. TablePrefixes).</param>
     /// <returns>A schema reader instance capable of parsing the source.</returns>
     /// <exception cref="ArgumentException">Thrown when the input path or connection string is empty.</exception>
     /// <exception cref="NotSupportedException">Thrown when the format is unsupported or the required reader is unavailable.</exception>
-    public virtual ISchemaReader DetectReader(string pathOrConnectionString)
+    public virtual ISchemaReader DetectReader(string pathOrConnectionString, MermaidReaderOptions? mermaidOptions = null)
     {
         if (string.IsNullOrWhiteSpace(pathOrConnectionString))
             throw new ArgumentException("Path or connection string cannot be empty.", nameof(pathOrConnectionString));
@@ -39,7 +40,7 @@ public class SchemaDetectionService
         if (trimmed.EndsWith(".mmd", StringComparison.OrdinalIgnoreCase) ||
             trimmed.EndsWith(".mermaid", StringComparison.OrdinalIgnoreCase))
         {
-            return new MermaidSchemaReader();
+            return new MermaidSchemaReader(mermaidOptions);
         }
 
         // 2. C# file or directory
@@ -125,7 +126,17 @@ public class SchemaDetectionService
     /// <exception cref="ArgumentException">Thrown when the input path or connection string is empty.</exception>
     /// <exception cref="FileNotFoundException">Thrown when the specified file does not exist.</exception>
     /// <exception cref="NotSupportedException">Thrown when the format is unsupported or required reader is unavailable.</exception>
-    public virtual async Task<DatabaseSchema> ReadSchemaAsync(string pathOrConnectionString, CancellationToken cancellationToken = default)
+    public virtual Task<DatabaseSchema> ReadSchemaAsync(string pathOrConnectionString, CancellationToken cancellationToken = default)
+        => ReadSchemaAsync(pathOrConnectionString, mermaidOptions: null, cancellationToken);
+
+    /// <summary>
+    /// Reads and parses a schema into a <see cref="DatabaseSchema"/> model using the detected format reader and optional options.
+    /// </summary>
+    /// <param name="pathOrConnectionString">The file path, directory, semicolon/comma-separated multi-path, or database connection string.</param>
+    /// <param name="mermaidOptions">Optional Mermaid reader configuration options (e.g. TablePrefixes).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The parsed database schema model.</returns>
+    public virtual async Task<DatabaseSchema> ReadSchemaAsync(string pathOrConnectionString, MermaidReaderOptions? mermaidOptions, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(pathOrConnectionString))
             throw new ArgumentException("Path or connection string cannot be empty.", nameof(pathOrConnectionString));
@@ -171,7 +182,7 @@ public class SchemaDetectionService
                 throw new FileNotFoundException($"Mermaid schema file not found: {trimmed}");
 
             var text = await File.ReadAllTextAsync(trimmed, cancellationToken);
-            return new MermaidSchemaReader().Read(text);
+            return new MermaidSchemaReader(mermaidOptions).Read(text);
         }
 
         // 3. C# Entity Single File
