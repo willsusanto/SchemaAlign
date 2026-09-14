@@ -763,5 +763,65 @@ public class MermaidSchemaReaderTests
         table.Columns["NullableWithNullPrefix"].IsNullable.Should().BeTrue();
         table.Columns["NullableWithNullPrefix"].Comment.Should().Be("User bio");
     }
+
+    [Fact]
+    public void Parse_TableEndingWithStatus_ShouldNotSingularizeToStatu()
+    {
+        var mermaid = """
+            erDiagram
+                tbl_masked_order_status ||--o{ tbl_masked_order : ""
+
+                tbl_masked_order_status {
+                    nvarchar(36) IdOrderStatus PK
+                    nvarchar(50) StatusName
+                }
+
+                tbl_masked_order {
+                    nvarchar(36) IdOrder PK
+                    nvarchar(36) IdOrderStatus FK
+                }
+            """;
+
+        var schema = _reader.Read(mermaid);
+        var orderTable = schema.Tables["tbl_masked_order"];
+        orderTable.ForeignKeys.Should().HaveCount(1);
+        var fk = orderTable.ForeignKeys[0];
+        fk.DependentColumn.Should().Be("IdOrderStatus");
+        fk.ConstraintName!.ToLowerInvariant().Should().NotContain("statuid");
+        fk.ConstraintName!.ToLowerInvariant().Should().NotContain("order_statu_");
+        fk.ConstraintName!.ToLowerInvariant().Should().Contain("order_status");
+    }
+
+    [Fact]
+    public void Parse_ForeignKeyWithTablePrefixes_ResolvesPrefixStrippedDependentColumn()
+    {
+        var mermaid = """
+            erDiagram
+                px_category ||--o{ px_item : ""
+
+                px_category {
+                    nvarchar(36) IdCategory PK
+                    nvarchar(50) CategoryName
+                }
+
+                px_item {
+                    nvarchar(36) IdItem PK
+                    nvarchar(36) IdCategory FK
+                }
+            """;
+
+        var readerWithPrefixes = new MermaidSchemaReader(new MermaidReaderOptions
+        {
+            TablePrefixes = new List<string> { "px_" }
+        });
+        var schema = readerWithPrefixes.Read(mermaid);
+        var itemTable = schema.Tables["px_item"];
+        itemTable.ForeignKeys.Should().HaveCount(1);
+        var fk = itemTable.ForeignKeys[0];
+        fk.DependentColumn.Should().Be("IdCategory");
+    }
 }
+
+
+
 

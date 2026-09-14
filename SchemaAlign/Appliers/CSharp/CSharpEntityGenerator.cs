@@ -152,6 +152,50 @@ public static class CSharpEntityGenerator
         var memberIndent = indent + "    ";
         var first = true;
 
+        // Foreign keys / Navigation properties pre-calculation
+        var usedPropNames = new HashSet<string>(table.Columns.Values.Select(c => NamingHelper.ToPascalCase(c.Name)), StringComparer.OrdinalIgnoreCase);
+        var fkNavPropMap = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var navProperties = new List<(ForeignKeySchema fk, string principalClassName, string navPropName, string fkPropName)>();
+
+        foreach (var fk in table.ForeignKeys)
+        {
+            var principalClassName = NamingHelper.ToEntityClassName(fk.PrincipalTable);
+            var navPropName = NamingHelper.ToNavigationPropertyName(fk.DependentColumn, fk.PrincipalTable);
+
+            if (usedPropNames.Contains(navPropName))
+            {
+                navPropName += "Entity";
+            }
+
+            var baseNavName = navPropName;
+            int counter = 1;
+            while (usedPropNames.Contains(navPropName))
+            {
+                navPropName = $"{baseNavName}{++counter}";
+            }
+            usedPropNames.Add(navPropName);
+
+            var fkPropName = NamingHelper.ToPascalCase(fk.DependentColumn);
+            navProperties.Add((fk, principalClassName, navPropName, fkPropName));
+
+            if (!fkNavPropMap.TryGetValue(fk.DependentColumn, out var list))
+            {
+                list = new List<string>();
+                fkNavPropMap[fk.DependentColumn] = list;
+            }
+            list.Add(navPropName);
+
+            if (!fkNavPropMap.TryGetValue(fkPropName, out var propList))
+            {
+                propList = new List<string>();
+                fkNavPropMap[fkPropName] = propList;
+            }
+            if (!propList.Contains(navPropName))
+            {
+                propList.Add(navPropName);
+            }
+        }
+
         // Columns
         foreach (var col in table.Columns.Values)
         {
@@ -196,6 +240,15 @@ public static class CSharpEntityGenerator
                     sb.AppendLine($"{memberIndent}[Column(\"{col.Name}\")]");
                 }
 
+                if (options.ForeignKeyPlacement == ForeignKeyPlacement.Scalar &&
+                    (fkNavPropMap.TryGetValue(col.Name, out var navNames) || fkNavPropMap.TryGetValue(propName, out navNames)))
+                {
+                    foreach (var navName in navNames.Distinct())
+                    {
+                        sb.AppendLine($"{memberIndent}[ForeignKey(\"{navName}\")]");
+                    }
+                }
+
                 if (col.Length.HasValue && col.Length > 0 &&
                     (col.Type == StandardType.String || col.Type == StandardType.ByteArray))
                 {
@@ -219,9 +272,7 @@ public static class CSharpEntityGenerator
         }
 
         // Foreign keys / Navigation properties
-        var usedPropNames = new HashSet<string>(table.Columns.Values.Select(c => NamingHelper.ToPascalCase(c.Name)), StringComparer.OrdinalIgnoreCase);
-
-        foreach (var fk in table.ForeignKeys)
+        foreach (var nav in navProperties)
         {
             if (!first)
             {
@@ -229,30 +280,12 @@ public static class CSharpEntityGenerator
             }
             first = false;
 
-            var principalClassName = NamingHelper.ToEntityClassName(fk.PrincipalTable);
-            var navPropName = NamingHelper.ToNavigationPropertyName(fk.DependentColumn, fk.PrincipalTable);
-
-            if (usedPropNames.Contains(navPropName))
+            if (options.UseDataAnnotations && options.ForeignKeyPlacement == ForeignKeyPlacement.Navigation)
             {
-                navPropName += "Entity";
+                sb.AppendLine($"{memberIndent}[ForeignKey(\"{nav.fkPropName}\")]");
             }
 
-            var baseNavName = navPropName;
-            int counter = 1;
-            while (usedPropNames.Contains(navPropName))
-            {
-                navPropName = $"{baseNavName}{++counter}";
-            }
-            usedPropNames.Add(navPropName);
-
-            var fkPropName = NamingHelper.ToPascalCase(fk.DependentColumn);
-
-            if (options.UseDataAnnotations)
-            {
-                sb.AppendLine($"{memberIndent}[ForeignKey(\"{fkPropName}\")]");
-            }
-
-            sb.AppendLine($"{memberIndent}public virtual {principalClassName}? {navPropName} {{ get; set; }}");
+            sb.AppendLine($"{memberIndent}public virtual {nav.principalClassName}? {nav.navPropName} {{ get; set; }}");
         }
 
         sb.AppendLine($"{indent}}}");

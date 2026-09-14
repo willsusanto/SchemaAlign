@@ -74,6 +74,32 @@ public class CSharpApplierOptions : ApplierOptions
     /// Set of column names that should not be generated because they are inherited from the base class.
     /// </summary>
     public HashSet<string> OmitInheritedColumns { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Placement of the [ForeignKey] data annotation attribute.
+    /// </summary>
+    public ForeignKeyPlacement ForeignKeyPlacement { get; set; } = ForeignKeyPlacement.Navigation;
+
+    /// <summary>
+    /// Table prefixes to strip when matching foreign key columns and generating navigation properties (e.g. "tbl_", "px_").
+    /// </summary>
+    public List<string> TablePrefixes { get; set; } = new();
+}
+
+/// <summary>
+/// Specifies the placement style for [ForeignKey] DataAnnotation attributes.
+/// </summary>
+public enum ForeignKeyPlacement
+{
+    /// <summary>
+    /// Attribute placed on the navigation property, referencing the scalar foreign key property: [ForeignKey("ScalarPropId")].
+    /// </summary>
+    Navigation,
+
+    /// <summary>
+    /// Attribute placed on the scalar foreign key property, referencing the navigation property: [ForeignKey("NavigationProp")].
+    /// </summary>
+    Scalar
 }
 
 

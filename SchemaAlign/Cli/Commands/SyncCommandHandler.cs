@@ -6,6 +6,7 @@ using SchemaAlign.Cli.Services;
 using SchemaAlign.Configuration;
 using SchemaAlign.Diff;
 using SchemaAlign.Models;
+using SchemaAlign.Readers.Mermaid;
 using Spectre.Console;
 
 namespace SchemaAlign.Cli.Commands;
@@ -99,6 +100,16 @@ public class SyncCommandOptions
     /// Whether to generate DataAnnotation attributes ([Key], [Column], [Table], etc.).
     /// </summary>
     public bool? UseDataAnnotations { get; set; }
+
+    /// <summary>
+    /// Placement of the [ForeignKey] data annotation attribute ('scalar' or 'navigation').
+    /// </summary>
+    public string? ForeignKeyPlacement { get; set; }
+
+    /// <summary>
+    /// Table prefixes to strip when matching foreign key columns and generating navigation properties (e.g. "ms", "lt", "tr").
+    /// </summary>
+    public List<string> TablePrefixes { get; set; } = new();
 }
 
 /// <summary>
@@ -172,6 +183,16 @@ public class SyncCommandHandler
                 options.UseFileScopedNamespaces = config.CSharp.UseFileScopedNamespaces.Value;
             if (!options.UseDataAnnotations.HasValue && config.CSharp?.UseDataAnnotations.HasValue == true)
                 options.UseDataAnnotations = config.CSharp.UseDataAnnotations.Value;
+            if (string.IsNullOrWhiteSpace(options.ForeignKeyPlacement) && !string.IsNullOrWhiteSpace(config.CSharp?.ForeignKeyPlacement))
+                options.ForeignKeyPlacement = config.CSharp.ForeignKeyPlacement;
+
+            var configPrefixes = (config.TablePrefixes ?? Enumerable.Empty<string>())
+                .Concat(config.CSharp?.TablePrefixes ?? Enumerable.Empty<string>());
+            foreach (var p in configPrefixes)
+            {
+                if (!options.TablePrefixes.Contains(p, StringComparer.OrdinalIgnoreCase))
+                    options.TablePrefixes.Add(p);
+            }
         }
 
         if (string.IsNullOrWhiteSpace(options.Current))
@@ -188,8 +209,12 @@ public class SyncCommandHandler
 
         try
         {
-            var currentSchema = await _detectionService.ReadSchemaAsync(options.Current, cancellationToken);
-            var targetSchema = await _detectionService.ReadSchemaAsync(options.Target, cancellationToken);
+            var mermaidOptions = options.TablePrefixes.Count > 0
+                ? new MermaidReaderOptions { TablePrefixes = options.TablePrefixes.ToList() }
+                : null;
+
+            var currentSchema = await _detectionService.ReadSchemaAsync(options.Current, mermaidOptions, cancellationToken);
+            var targetSchema = await _detectionService.ReadSchemaAsync(options.Target, mermaidOptions, cancellationToken);
 
             var targetType = options.TargetTypeOverride ?? _detectionService.DetectTargetType(options.Current);
 
@@ -290,6 +315,15 @@ public class SyncCommandHandler
             if (options.UseDataAnnotations.HasValue)
             {
                 csOpts.UseDataAnnotations = options.UseDataAnnotations.Value;
+            }
+            if (!string.IsNullOrWhiteSpace(options.ForeignKeyPlacement) &&
+                Enum.TryParse<ForeignKeyPlacement>(options.ForeignKeyPlacement, true, out var fkPlacement))
+            {
+                csOpts.ForeignKeyPlacement = fkPlacement;
+            }
+            if (options.TablePrefixes.Count > 0)
+            {
+                csOpts.TablePrefixes = options.TablePrefixes.ToList();
             }
             foreach (var col in options.OmitInheritedColumns)
             {

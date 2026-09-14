@@ -62,6 +62,12 @@ public static class CommandLineConfiguration
             Description = "Path to .schemaalign.json configuration file"
         };
 
+        var diffTablePrefixOpt = new Option<string[]>("--table-prefix")
+        {
+            Description = "Table prefixes to strip when matching foreign key columns (can be specified multiple times)"
+        };
+        diffTablePrefixOpt.Aliases.Add("--table-prefixes");
+
         var diffCommand = new Command("diff", "Compare current schema against desired target schema non-destructively")
         {
             diffCurrentOpt,
@@ -69,7 +75,8 @@ public static class CommandLineConfiguration
             diffModeOpt,
             diffOutputOpt,
             diffDetailedOpt,
-            diffConfigOpt
+            diffConfigOpt,
+            diffTablePrefixOpt
         };
 
         diffCommand.SetAction(async parseResult =>
@@ -82,7 +89,8 @@ public static class CommandLineConfiguration
                 Mode = parseResult.GetValue(diffModeOpt) ?? "incremental",
                 Output = parseResult.GetValue(diffOutputOpt) ?? "console",
                 Detailed = parseResult.GetValue(diffDetailedOpt),
-                ConfigFile = parseResult.GetValue(diffConfigOpt)
+                ConfigFile = parseResult.GetValue(diffConfigOpt),
+                TablePrefixes = (parseResult.GetValue(diffTablePrefixOpt) ?? Array.Empty<string>()).ToList()
             };
             return await handler.RunAsync(options);
         });
@@ -173,6 +181,18 @@ public static class CommandLineConfiguration
         };
         syncClassAttrOpt.Aliases.Add("--class-attr");
 
+        var syncFkPlacementOpt = new Option<string?>("--foreign-key-placement")
+        {
+            Description = "Placement of the [ForeignKey] data annotation attribute ('scalar' or 'navigation')"
+        };
+        syncFkPlacementOpt.Aliases.Add("--fk-placement");
+
+        var syncTablePrefixOpt = new Option<string[]>("--table-prefix")
+        {
+            Description = "Table prefixes to strip when matching foreign key columns and generating navigation properties (can be specified multiple times)"
+        };
+        syncTablePrefixOpt.Aliases.Add("--table-prefixes");
+
         var syncCommand = new Command("sync", "Synchronize current schema to match desired target schema")
         {
             syncCurrentOpt,
@@ -188,7 +208,9 @@ public static class CommandLineConfiguration
             syncConfigOpt,
             syncBaseClassOpt,
             syncUsingOpt,
-            syncClassAttrOpt
+            syncClassAttrOpt,
+            syncFkPlacementOpt,
+            syncTablePrefixOpt
         };
 
         syncCommand.SetAction(async parseResult =>
@@ -202,6 +224,7 @@ public static class CommandLineConfiguration
 
             var usings = (parseResult.GetValue(syncUsingOpt) ?? Array.Empty<string>()).ToList();
             var classAttrs = (parseResult.GetValue(syncClassAttrOpt) ?? Array.Empty<string>()).ToList();
+            var tablePrefixes = (parseResult.GetValue(syncTablePrefixOpt) ?? Array.Empty<string>()).ToList();
 
             var options = new SyncCommandOptions
             {
@@ -217,7 +240,9 @@ public static class CommandLineConfiguration
                 ConfigFile = parseResult.GetValue(syncConfigOpt),
                 BaseClass = parseResult.GetValue(syncBaseClassOpt),
                 Usings = usings,
-                ClassAttributes = classAttrs
+                ClassAttributes = classAttrs,
+                ForeignKeyPlacement = parseResult.GetValue(syncFkPlacementOpt),
+                TablePrefixes = tablePrefixes
             };
             return await handler.RunAsync(options);
         });
