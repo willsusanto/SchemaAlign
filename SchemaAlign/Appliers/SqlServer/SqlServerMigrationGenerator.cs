@@ -142,6 +142,34 @@ public static class SqlServerMigrationGenerator
                 var colName = colDiff.ColumnName;
                 sb.AppendLine($"IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[{schema}].[{tableDiff.TableName}]') AND name = N'{EscapeSql(colName)}')");
                 sb.AppendLine("BEGIN");
+                sb.AppendLine($"    -- Drop foreign keys depending on this column");
+                sb.AppendLine($"    DECLARE @dropFkSql NVARCHAR(MAX);");
+                sb.AppendLine($"    WHILE EXISTS (");
+                sb.AppendLine($"        SELECT 1 FROM sys.foreign_key_columns fkc");
+                sb.AppendLine($"        JOIN sys.foreign_keys fk ON fkc.constraint_object_id = fk.object_id");
+                sb.AppendLine($"        WHERE (fkc.parent_object_id = OBJECT_ID(N'[{schema}].[{tableDiff.TableName}]') AND fkc.parent_column_id = COLUMNPROPERTY(OBJECT_ID(N'[{schema}].[{tableDiff.TableName}]'), N'{EscapeSql(colName)}', 'ColumnId'))");
+                sb.AppendLine($"           OR (fkc.referenced_object_id = OBJECT_ID(N'[{schema}].[{tableDiff.TableName}]') AND fkc.referenced_column_id = COLUMNPROPERTY(OBJECT_ID(N'[{schema}].[{tableDiff.TableName}]'), N'{EscapeSql(colName)}', 'ColumnId'))");
+                sb.AppendLine($"    )");
+                sb.AppendLine($"    BEGIN");
+                sb.AppendLine($"        SELECT TOP 1 @dropFkSql = 'ALTER TABLE [' + OBJECT_SCHEMA_NAME(fk.parent_object_id) + '].[' + OBJECT_NAME(fk.parent_object_id) + '] DROP CONSTRAINT [' + fk.name + '];'");
+                sb.AppendLine($"        FROM sys.foreign_key_columns fkc");
+                sb.AppendLine($"        JOIN sys.foreign_keys fk ON fkc.constraint_object_id = fk.object_id");
+                sb.AppendLine($"        WHERE (fkc.parent_object_id = OBJECT_ID(N'[{schema}].[{tableDiff.TableName}]') AND fkc.parent_column_id = COLUMNPROPERTY(OBJECT_ID(N'[{schema}].[{tableDiff.TableName}]'), N'{EscapeSql(colName)}', 'ColumnId'))");
+                sb.AppendLine($"           OR (fkc.referenced_object_id = OBJECT_ID(N'[{schema}].[{tableDiff.TableName}]') AND fkc.referenced_column_id = COLUMNPROPERTY(OBJECT_ID(N'[{schema}].[{tableDiff.TableName}]'), N'{EscapeSql(colName)}', 'ColumnId'));");
+                sb.AppendLine($"        EXEC sp_executesql @dropFkSql;");
+                sb.AppendLine($"    END;");
+                sb.AppendLine();
+                sb.AppendLine($"    -- Drop default constraints on this column if any");
+                sb.AppendLine($"    DECLARE @dropDfSql NVARCHAR(MAX);");
+                sb.AppendLine($"    SELECT @dropDfSql = 'ALTER TABLE [{schema}].[{tableDiff.TableName}] DROP CONSTRAINT [' + dc.name + '];'");
+                sb.AppendLine($"    FROM sys.default_constraints dc");
+                sb.AppendLine($"    WHERE dc.parent_object_id = OBJECT_ID(N'[{schema}].[{tableDiff.TableName}]')");
+                sb.AppendLine($"      AND dc.parent_column_id = COLUMNPROPERTY(OBJECT_ID(N'[{schema}].[{tableDiff.TableName}]'), N'{EscapeSql(colName)}', 'ColumnId');");
+                sb.AppendLine($"    IF @dropDfSql IS NOT NULL");
+                sb.AppendLine($"    BEGIN");
+                sb.AppendLine($"        EXEC sp_executesql @dropDfSql;");
+                sb.AppendLine($"    END;");
+                sb.AppendLine();
                 sb.AppendLine($"    ALTER TABLE [{schema}].[{tableDiff.TableName}] DROP COLUMN [{colName}];");
                 sb.AppendLine("END;");
                 sb.AppendLine("GO");
@@ -264,16 +292,87 @@ public static class SqlServerMigrationGenerator
 
         foreach (var (schema, tableName, fk) in allFksToAdd)
         {
-            var constraintName = fk.ConstraintName ?? $"FK_{tableName}_{fk.PrincipalTable}_{fk.DependentColumn}";
+            var pCol = ResolvePrincipalColumn(fk, diff);
+            var depCol = ResolveDependentColumn(tableName, fk, diff);
+            var constraintName = fk.ConstraintName ?? $"FK_{tableName}_{fk.PrincipalTable}_{depCol}";
             var pSchema = GetPrincipalSchema(fk.PrincipalTable, diff, options);
 
             sb.AppendLine($"IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'{EscapeSql(constraintName)}')");
+            sb.AppendLine($"   AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[{schema}].[{tableName}]') AND name = N'{EscapeSql(depCol)}')");
+            sb.AppendLine($"   AND EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[{pSchema}].[{fk.PrincipalTable}]') AND name = N'{EscapeSql(pCol)}')");
             sb.AppendLine("BEGIN");
-            sb.AppendLine($"    ALTER TABLE [{schema}].[{tableName}] ADD CONSTRAINT [{constraintName}] FOREIGN KEY ([{fk.DependentColumn}]) REFERENCES [{pSchema}].[{fk.PrincipalTable}] ([{fk.PrincipalColumn}]);");
+            sb.AppendLine($"    ALTER TABLE [{schema}].[{tableName}] ADD CONSTRAINT [{constraintName}] FOREIGN KEY ([{depCol}]) REFERENCES [{pSchema}].[{fk.PrincipalTable}] ([{pCol}]);");
             sb.AppendLine("END;");
             sb.AppendLine("GO");
             sb.AppendLine();
         }
+    }
+
+    private static string ResolvePrincipalColumn(ForeignKeySchema fk, SchemaDiff diff)
+    {
+        var foundTable = diff.FindTable(fk.PrincipalTable);
+        var table = foundTable?.Target ?? foundTable?.Source ??
+                    diff.TargetSchema?.FindTable(fk.PrincipalTable) ??
+                    diff.SourceSchema?.FindTable(fk.PrincipalTable);
+
+        if (table != null)
+        {
+            if (string.Equals(fk.PrincipalColumn, "Id", StringComparison.OrdinalIgnoreCase) || table.FindColumn(fk.PrincipalColumn) == null)
+            {
+                var pk = table.PrimaryKeys.FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(pk))
+                {
+                    return pk;
+                }
+            }
+        }
+
+        return fk.PrincipalColumn;
+    }
+
+    private static string ResolveDependentColumn(string tableName, ForeignKeySchema fk, SchemaDiff diff)
+    {
+        var foundTable = diff.FindTable(tableName);
+        var table = foundTable?.Target ?? foundTable?.Source ??
+                    diff.TargetSchema?.FindTable(tableName) ??
+                    diff.SourceSchema?.FindTable(tableName);
+
+        if (table != null && table.FindColumn(fk.DependentColumn) == null)
+        {
+            var strippedPrincipal = StripPrefix(fk.PrincipalTable, new[] { "Ms", "Tr", "Lt", "Tb" });
+            var candidates = new[] { $"Id{strippedPrincipal}", $"Id{fk.PrincipalTable}", $"{strippedPrincipal}Id", $"{fk.PrincipalTable}Id" };
+            foreach (var cand in candidates)
+            {
+                var col = table.FindColumn(cand);
+                if (col != null)
+                {
+                    return col.Name;
+                }
+            }
+        }
+
+        return fk.DependentColumn;
+    }
+
+    private static string StripPrefix(string tableName, IEnumerable<string> prefixes)
+    {
+        foreach (var prefix in prefixes)
+        {
+            if (!string.IsNullOrWhiteSpace(prefix) &&
+                tableName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                tableName.Length > prefix.Length)
+            {
+                if (prefix.EndsWith('_'))
+                {
+                    return tableName[prefix.Length..];
+                }
+                if (char.IsUpper(tableName[prefix.Length]))
+                {
+                    return tableName[prefix.Length..];
+                }
+            }
+        }
+        return tableName;
     }
 
     private static string BuildColumnDefinition(ColumnSchema column, string? tableNameForConstraint = null)

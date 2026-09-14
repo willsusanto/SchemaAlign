@@ -137,3 +137,9 @@ When `baseClass` is configured (via `.schemaalign.json` or `--base-class`), Sche
 - **Table Prefix Stripping (`tablePrefixes` / `--table-prefix`)**:
   - Strips configured prefixes (e.g. `tbl_`, `ms`, `lt`, `tr`) when matching foreign key candidate columns in Mermaid diagrams and generating navigation property names.
   - Automatically detects 2-character PascalCase prefixes (such as `MsAuthor` or `LtBook`) during foreign key column resolution.
+
+### SQL Server Safe Migrations & Constraint Guards
+
+When generating or applying SQL Server DDL migrations:
+- **Safe Column Drops**: Before issuing `ALTER TABLE ... DROP COLUMN`, SchemaAlign automatically cleans up any dependent foreign keys in `sys.foreign_key_columns` and default constraints in `sys.default_constraints` attached to the column to avoid SQL Server dependency check violations (`Msg 5074`).
+- **Guarded Foreign Key Additions**: Generated foreign keys include metadata checks verifying that both the referencing column and the referenced primary key column exist before attempting constraint creation, preventing batch aborts (`Msg 1769`) and transaction rollbacks (`Msg 3902`).

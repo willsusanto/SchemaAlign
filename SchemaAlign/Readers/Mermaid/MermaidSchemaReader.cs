@@ -436,7 +436,36 @@ public class MermaidSchemaReader : ISchemaReader
             cardinality = ForeignKeyCardinality.ManyToMany;
         }
 
-        var principalCol = principalTable.PrimaryKeys.FirstOrDefault() ?? "Id";
+        var principalCol = principalTable.PrimaryKeys.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(principalCol))
+        {
+            var prefixesToCheck = new List<string>();
+            if (Options.TablePrefixes != null) prefixesToCheck.AddRange(Options.TablePrefixes);
+            if (principalTable.Name.Length > 3 && char.IsUpper(principalTable.Name[0]) && char.IsLower(principalTable.Name[1]) && char.IsUpper(principalTable.Name[2]))
+            {
+                var autoPrefix = principalTable.Name.Substring(0, 2);
+                if (!prefixesToCheck.Contains(autoPrefix, StringComparer.OrdinalIgnoreCase)) prefixesToCheck.Add(autoPrefix);
+            }
+            foreach (var prefix in prefixesToCheck)
+            {
+                if (principalTable.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && principalTable.Name.Length > prefix.Length)
+                {
+                    var stripped = principalTable.Name.Substring(prefix.Length).TrimStart('_');
+                    var candidates = new[] { $"Id{stripped}", $"Id{principalTable.Name}", $"{stripped}Id", $"{principalTable.Name}Id" };
+                    foreach (var cand in candidates)
+                    {
+                        var col = principalTable.FindColumn(cand);
+                        if (col != null)
+                        {
+                            principalCol = col.Name;
+                            break;
+                        }
+                    }
+                    if (!string.IsNullOrWhiteSpace(principalCol)) break;
+                }
+            }
+            principalCol ??= "Id";
+        }
         var dependentCol = FindDependentColumn(dependentTable, principalTable, label, Options.TablePrefixes);
 
         var constraintName = !string.IsNullOrWhiteSpace(label) && label.StartsWith("FK_", StringComparison.OrdinalIgnoreCase)

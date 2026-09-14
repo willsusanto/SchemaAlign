@@ -85,6 +85,34 @@ public static class ConfigurationLoader
     }
 
     /// <summary>
+    /// Synchronously loads a configuration from a specific file path.
+    /// </summary>
+    public static SchemaAlignConfiguration? LoadFromFile(string filePath)
+    {
+        if (!File.Exists(filePath))
+        {
+            return null;
+        }
+
+        var json = File.ReadAllText(filePath);
+        return Parse(json);
+    }
+
+    /// <summary>
+    /// Synchronously locates and loads configuration upward from start directory.
+    /// </summary>
+    public static SchemaAlignConfiguration? Load(string? startDirectory = null)
+    {
+        var path = FindConfigFile(startDirectory);
+        if (string.IsNullOrEmpty(path))
+        {
+            return null;
+        }
+
+        return LoadFromFile(path);
+    }
+
+    /// <summary>
     /// Locates the nearest configuration file upward from start directory and loads it.
     /// </summary>
     public static async Task<SchemaAlignConfiguration?> FindAndLoadAsync(string? startDirectory = null, CancellationToken cancellationToken = default)

@@ -53,6 +53,22 @@ public class SchemaAlignConfiguration
     /// C# entity generation and applier specific configurations.
     /// </summary>
     public CSharpConfiguration CSharp { get; set; } = new();
+
+    /// <summary>
+    /// Database schema and naming convention configurations.
+    /// </summary>
+    public ConventionsConfiguration Conventions { get; set; } = new();
+}
+
+/// <summary>
+/// Database schema and naming convention configuration settings.
+/// </summary>
+public class ConventionsConfiguration
+{
+    /// <summary>
+    /// Known table prefixes (e.g. "Ms", "Tr", "Lt", "Tb") to strip when matching convention-based foreign key columns.
+    /// </summary>
+    public List<string> TablePrefixes { get; set; } = new() { "Ms", "Tr", "Lt", "Tb" };
 }
 
 /// <summary>
