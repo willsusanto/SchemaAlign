@@ -333,7 +333,7 @@ public class SyncCommandHandler
         }
         else if (targetType == TargetType.SqlServerDatabase || targetType == TargetType.SqlServerScript)
         {
-            applierOptions = new SqlServerApplierOptions
+            var sqlOpts = new SqlServerApplierOptions
             {
                 TargetDirectory = primaryTargetDir,
                 AllowDrops = options.AllowDrop,
@@ -341,6 +341,11 @@ public class SyncCommandHandler
                 ConnectionString = IsConnectionString(primaryTargetDir) ? primaryTargetDir : null,
                 ScriptOutputFilePath = options.OutputFile
             };
+            if (options.TablePrefixes.Count > 0)
+            {
+                sqlOpts.TablePrefixes = options.TablePrefixes.ToList();
+            }
+            applierOptions = sqlOpts;
         }
         else
         {

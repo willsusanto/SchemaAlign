@@ -45,7 +45,7 @@ public class SchemaAlignConfiguration
     public bool? Detailed { get; set; }
 
     /// <summary>
-    /// Table prefixes to strip when matching foreign key columns and deriving navigation property names (e.g. ["ms", "lt", "tr"] or ["tbl_"]).
+    /// Table prefixes to strip when matching foreign key columns, generating SQL Server foreign keys, and deriving navigation property names (e.g. ["ms", "lt", "tr"] or ["tbl_"]).
     /// </summary>
     public List<string> TablePrefixes { get; set; } = new();
 
@@ -54,6 +54,7 @@ public class SchemaAlignConfiguration
     /// </summary>
     public CSharpConfiguration CSharp { get; set; } = new();
 }
+
 
 /// <summary>
 /// C# entity applier and generator configuration settings.
@@ -101,7 +102,7 @@ public class CSharpConfiguration
     public string? ForeignKeyPlacement { get; set; }
 
     /// <summary>
-    /// Table prefixes to strip when matching foreign key columns and deriving navigation property names (e.g. ["ms", "lt", "tr"] or ["tbl_"]).
+    /// Table prefixes to strip when matching foreign key columns, generating SQL Server foreign keys, and deriving navigation property names (e.g. ["ms", "lt", "tr"] or ["tbl_"]).
     /// </summary>
     public List<string> TablePrefixes { get; set; } = new();
 }

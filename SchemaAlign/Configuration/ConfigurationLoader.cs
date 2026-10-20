@@ -84,6 +84,7 @@ public static class ConfigurationLoader
         return Parse(json);
     }
 
+
     /// <summary>
     /// Locates the nearest configuration file upward from start directory and loads it.
     /// </summary>

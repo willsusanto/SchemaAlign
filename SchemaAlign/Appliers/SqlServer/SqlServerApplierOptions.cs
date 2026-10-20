@@ -39,4 +39,10 @@ public class SqlServerApplierOptions : ApplierOptions
     /// Default schema name when not specified (defaults to "dbo").
     /// </summary>
     public string DefaultSchema { get; set; } = "dbo";
+
+    /// <summary>
+    /// Known table prefixes (e.g. "Ms", "Tr", "Lt", "Tb", "tbl_") to strip when matching convention-based foreign key columns.
+    /// </summary>
+    public List<string> TablePrefixes { get; set; } = new() { "Ms", "Tr", "Lt", "Tb" };
 }
+
