@@ -1491,6 +1491,94 @@ public class CSharpEntityApplierTests
         }
         return null;
     }
+
+    [Fact]
+    public void GenerateEntitySource_WithForeignKeyPlacementScalar_EmitsForeignKeyOnScalarProperty()
+    {
+        var table = new TableSchema
+        {
+            Name = "tbl_masked_child",
+            Schema = "dbo"
+        };
+        table.AddColumn(new ColumnSchema
+        {
+            Name = "IdChild",
+            Type = StandardType.String,
+            Length = 36,
+            IsPrimaryKey = true
+        });
+        table.AddColumn(new ColumnSchema
+        {
+            Name = "IdParent",
+            Type = StandardType.String,
+            Length = 36,
+            IsNullable = false
+        });
+        table.AddForeignKey(new ForeignKeySchema
+        {
+            ConstraintName = "FK_tbl_masked_child_tbl_masked_parent_IdParent",
+            PrincipalTable = "tbl_masked_parent",
+            PrincipalColumn = "IdParent",
+            DependentTable = "tbl_masked_child",
+            DependentColumn = "IdParent"
+        });
+
+        var options = new CSharpApplierOptions
+        {
+            UseDataAnnotations = true,
+            ForeignKeyPlacement = ForeignKeyPlacement.Scalar
+        };
+
+        var generatedCode = _applier.GenerateEntitySource(table, options);
+
+        generatedCode.Should().Contain("[ForeignKey(\"Parent\")]");
+        generatedCode.Should().NotContain("[ForeignKey(\"IdParent\")]");
+        generatedCode.Should().Contain("public virtual TblMaskedParent? Parent { get; set; }");
+    }
+
+    [Fact]
+    public void GenerateEntitySource_WithForeignKeyPlacementNavigation_EmitsForeignKeyOnNavigationProperty()
+    {
+        var table = new TableSchema
+        {
+            Name = "tbl_masked_child",
+            Schema = "dbo"
+        };
+        table.AddColumn(new ColumnSchema
+        {
+            Name = "IdChild",
+            Type = StandardType.String,
+            Length = 36,
+            IsPrimaryKey = true
+        });
+        table.AddColumn(new ColumnSchema
+        {
+            Name = "IdParent",
+            Type = StandardType.String,
+            Length = 36,
+            IsNullable = false
+        });
+        table.AddForeignKey(new ForeignKeySchema
+        {
+            ConstraintName = "FK_tbl_masked_child_tbl_masked_parent_IdParent",
+            PrincipalTable = "tbl_masked_parent",
+            PrincipalColumn = "IdParent",
+            DependentTable = "tbl_masked_child",
+            DependentColumn = "IdParent"
+        });
+
+        var options = new CSharpApplierOptions
+        {
+            UseDataAnnotations = true,
+            ForeignKeyPlacement = ForeignKeyPlacement.Navigation
+        };
+
+        var generatedCode = _applier.GenerateEntitySource(table, options);
+
+        generatedCode.Should().NotContain("[ForeignKey(\"Parent\")]");
+        generatedCode.Should().Contain("[ForeignKey(\"IdParent\")]");
+        generatedCode.Should().Contain("public virtual TblMaskedParent? Parent { get; set; }");
+    }
 }
 
 

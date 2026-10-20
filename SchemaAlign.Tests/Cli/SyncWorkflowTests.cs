@@ -348,4 +348,107 @@ public class SyncWorkflowTests
         exitCode.Should().Be(1);
         console.Output.Should().Contain("Target schema path (-t|--target) is required");
     }
+
+    [Fact]
+    public async Task ExecuteSync_WithForeignKeyPlacementAndTablePrefixes_ConfiguresCSharpApplierOptions()
+    {
+        var console = new TestConsole();
+        var mockApplier = new MockApplier();
+        var registry = new ApplierRegistry();
+        registry.Register(TargetType.CSharp, mockApplier);
+
+        var sourceSchema = new DatabaseSchema();
+        var targetSchema = new DatabaseSchema();
+        var newTable = new TableSchema { Name = "tbl_masked_order" };
+        newTable.AddColumn(new ColumnSchema { Name = "Id", Type = StandardType.Int, IsPrimaryKey = true });
+        targetSchema.AddTable(newTable);
+
+        var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
+        var options = new SyncCommandOptions
+        {
+            Current = "Entities",
+            Target = "schema.mmd",
+            DryRun = true,
+            Yes = true,
+            Interactive = false,
+            ForeignKeyPlacement = "scalar",
+            TablePrefixes = new List<string> { "tbl_", "px_" }
+        };
+
+        var exitCode = await handler.ExecuteAsync(sourceSchema, targetSchema, options, TargetType.CSharp);
+
+        exitCode.Should().Be(0);
+        mockApplier.LastOptionsUsed.Should().NotBeNull();
+        mockApplier.LastOptionsUsed.Should().BeOfType<CSharpApplierOptions>();
+
+        var csOpts = (CSharpApplierOptions)mockApplier.LastOptionsUsed!;
+        csOpts.ForeignKeyPlacement.Should().Be(ForeignKeyPlacement.Scalar);
+        csOpts.TablePrefixes.Should().ContainInOrder("tbl_", "px_");
+    }
+
+    [Fact]
+    public async Task RunAsync_WithConfigFileSpecifyingForeignKeyPlacementAndTablePrefixes_AppliesOptionsToCSharpApplier()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"SchemaAlign_Sync_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var configJson = """
+                {
+                  "tablePrefixes": ["tbl_"],
+                  "csharp": {
+                    "foreignKeyPlacement": "scalar",
+                    "tablePrefixes": ["px_"]
+                  }
+                }
+                """;
+            var configPath = Path.Combine(tempDir, ".schemaalign.json");
+            await File.WriteAllTextAsync(configPath, configJson);
+
+            var mermaidSchema = """
+                erDiagram
+                    tbl_masked_order {
+                        nvarchar(36) IdOrder PK
+                    }
+                """;
+            var mmdPath = Path.Combine(tempDir, "target.mmd");
+            await File.WriteAllTextAsync(mmdPath, mermaidSchema);
+
+            var currentDir = Path.Combine(tempDir, "Entities");
+            Directory.CreateDirectory(currentDir);
+
+            var console = new TestConsole();
+            var mockApplier = new MockApplier();
+            var registry = new ApplierRegistry();
+            registry.Register(TargetType.CSharp, mockApplier);
+
+            var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
+            var options = new SyncCommandOptions
+            {
+                ConfigFile = configPath,
+                Current = currentDir,
+                Target = mmdPath,
+                DryRun = true,
+                Yes = true,
+                Interactive = false
+            };
+
+            var exitCode = await handler.RunAsync(options);
+
+            exitCode.Should().Be(0);
+            mockApplier.LastOptionsUsed.Should().NotBeNull();
+            var csOpts = (CSharpApplierOptions)mockApplier.LastOptionsUsed!;
+            csOpts.ForeignKeyPlacement.Should().Be(ForeignKeyPlacement.Scalar);
+            csOpts.TablePrefixes.Should().Contain("tbl_");
+            csOpts.TablePrefixes.Should().Contain("px_");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
 }
