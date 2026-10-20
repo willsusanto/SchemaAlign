@@ -4,7 +4,7 @@ Universal database and entity schema alignment tool for .NET. SchemaAlign parses
 
 ## Features
 
-- **Multi-Source Parsing**: Reads schemas from Mermaid ER diagrams (`.mmd`, `.mermaid`), C# entity classes/directories (`.cs`, including semicolon- or comma-separated multi-paths), SQL scripts (`.sql`), and SQL Server databases.
+- **Multi-Source Parsing**: Reads schemas from Mermaid ER diagrams (`.mmd`, `.mermaid`), C# entity classes/directories (`.cs`, including semicolon- or comma-separated multi-paths), SQL scripts (`.sql`), and SQL Server databases. Two-pass Mermaid parsing resolves foreign key relationships regardless of whether entities or relationships are declared first.
 - **Diff Modes**:
   - `incremental` (default): Designed for sprint diagrams; compares changes while preserving existing unmentioned tables in your codebase.
   - `snapshot`: Treats target schema as the complete source of truth; marks unmentioned tables and columns for removal.
@@ -135,7 +135,7 @@ When `baseClass` is configured (via `.schemaalign.json` or `--base-class`), Sche
   - `navigation` (default): Emits `[ForeignKey("ScalarPropId")]` on the navigation property.
   - `scalar`: Emits `[ForeignKey("NavigationProp")]` on the scalar foreign key property and omits `[ForeignKey]` from the navigation property.
 - **Table Prefix Stripping (`tablePrefixes` / `--table-prefix`)**:
-  - Strips configured prefixes (e.g. `tbl_`, `ms`, `lt`, `tr`) when matching foreign key candidate columns in Mermaid diagrams and generating navigation property names.
+  - Strips configured prefixes (e.g. `tbl_`, `ms`, `lt`, `tr`) when matching foreign key candidate columns in Mermaid diagrams, generating navigation property names, and resolving foreign key constraints in SQL Server migrations.
   - Automatically detects 2-character PascalCase prefixes (such as `MsAuthor` or `LtBook`) during foreign key column resolution.
 
 ### SQL Server Safe Migrations & Constraint Guards
@@ -143,3 +143,4 @@ When `baseClass` is configured (via `.schemaalign.json` or `--base-class`), Sche
 When generating or applying SQL Server DDL migrations:
 - **Safe Column Drops**: Before issuing `ALTER TABLE ... DROP COLUMN`, SchemaAlign automatically cleans up any dependent foreign keys in `sys.foreign_key_columns` and default constraints in `sys.default_constraints` attached to the column to avoid SQL Server dependency check violations (`Msg 5074`).
 - **Guarded Foreign Key Additions**: Generated foreign keys include metadata checks verifying that both the referencing column and the referenced primary key column exist before attempting constraint creation, preventing batch aborts (`Msg 1769`) and transaction rollbacks (`Msg 3902`).
+- **Primary Key & Column Resolution**: Resolves actual primary key column names from parent tables across target or source schemas when generic `Id` is supplied, and resolves convention-based foreign key columns matching parent table prefixes.

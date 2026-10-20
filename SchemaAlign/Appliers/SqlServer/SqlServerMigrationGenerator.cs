@@ -7,7 +7,7 @@ using SchemaAlign.Models.TypeMapping;
 namespace SchemaAlign.Appliers.SqlServer;
 
 /// <summary>
-/// Generates idempotent T-SQL DDL migration scripts and batches from a <see cref="SchemaDiff"/>.
+/// Generates idempotent, constraint-safe T-SQL DDL migration scripts and batches from a <see cref="SchemaDiff"/>.
 /// </summary>
 public static class SqlServerMigrationGenerator
 {
