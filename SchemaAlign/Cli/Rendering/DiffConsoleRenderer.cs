@@ -185,7 +185,7 @@ public static class DiffConsoleRenderer
         {
             var remaining = changedTables.Count - displayTables.Count;
             var reportNotice = !string.IsNullOrWhiteSpace(reportPath)
-                ? $" Full details in {reportPath}."
+                ? $" Full details in {Markup.Escape(reportPath)}."
                 : "";
             root.AddNode($"[grey]... and {remaining} more tables.{reportNotice}[/]");
         }

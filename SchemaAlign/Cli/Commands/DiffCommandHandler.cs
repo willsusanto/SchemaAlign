@@ -164,11 +164,17 @@ public class DiffCommandHandler
                     Directory.CreateDirectory(dir);
                 }
                 File.WriteAllText(reportPath, DiffConsoleRenderer.RenderMarkdown(diff, title: $"Schema Diff: {options.Current} -> {options.Target}"));
-                _console.MarkupLine($"[green]✔ Full markdown report written to:[/] [underline]{Markup.Escape(reportPath)}[/]\n");
+                if (!string.Equals(options.Output, "json", StringComparison.OrdinalIgnoreCase))
+                {
+                    _console.MarkupLine($"[green]✔ Full markdown report written to:[/] [underline]{Markup.Escape(reportPath)}[/]\n");
+                }
             }
             catch (Exception ex)
             {
-                _console.MarkupLine($"[yellow]Warning: Could not write report to '{reportPath}': {Markup.Escape(ex.Message)}[/]");
+                if (!string.Equals(options.Output, "json", StringComparison.OrdinalIgnoreCase))
+                {
+                    _console.MarkupLine($"[yellow]Warning: Could not write report to '{reportPath}': {Markup.Escape(ex.Message)}[/]");
+                }
             }
         }
 

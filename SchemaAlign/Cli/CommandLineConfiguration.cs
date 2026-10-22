@@ -122,7 +122,6 @@ public static class CommandLineConfiguration
             Description = "Path to write the generated SQL Server migration script (e.g. ./migrations/migration.sql)"
         };
         syncOutputFileOpt.Aliases.Add("-o");
-        syncOutputFileOpt.Aliases.Add("--script-out");
 
         var syncModeOpt = new Option<string>("--mode")
         {

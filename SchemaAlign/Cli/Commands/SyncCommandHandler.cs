@@ -257,9 +257,27 @@ public class SyncCommandHandler
         }
 
         var reportPath = options.ReportPath;
-        if (string.IsNullOrWhiteSpace(reportPath) && diff.HasChanges && (diff.Tables.Count(t => t.HasChanges) > 15 || isSnapshot))
+        if (string.IsNullOrWhiteSpace(reportPath) && diff.HasChanges && diff.Tables.Count(t => t.HasChanges) > 15)
         {
             reportPath = Path.Combine(".schemaalign", "sync_report.md");
+        }
+
+        var fullDiff = diff;
+        if (!string.IsNullOrWhiteSpace(reportPath))
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(reportPath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+                File.WriteAllText(reportPath, DiffConsoleRenderer.RenderMarkdown(fullDiff, title: $"Schema Sync Report: {options.Current} -> {options.Target}"));
+            }
+            catch (Exception ex)
+            {
+                _console.MarkupLine($"[yellow]Warning: Could not write report to '{reportPath}': {Markup.Escape(ex.Message)}[/]");
+            }
         }
 
         // Print initial diff table
@@ -381,7 +399,7 @@ public class SyncCommandHandler
                 {
                     Directory.CreateDirectory(dir);
                 }
-                File.WriteAllText(reportPath, DiffConsoleRenderer.RenderMarkdown(diff, previews, title: $"Schema Sync Report: {options.Current} -> {options.Target}"));
+                File.WriteAllText(reportPath, DiffConsoleRenderer.RenderMarkdown(fullDiff, previews, title: $"Schema Sync Report: {options.Current} -> {options.Target}"));
             }
             catch (Exception ex)
             {
