@@ -513,4 +513,88 @@ public class SyncWorkflowTests
             }
         }
     }
+
+    [Fact]
+    public void ExecuteDiff_WhenReportPathHasBracketsAndWriteFails_DisplaysWarningWithoutMarkupParseException()
+    {
+        var console = new TestConsole();
+        console.Profile.Width = 300;
+        var handler = new DiffCommandHandler(new SchemaDetectionService(), console);
+
+        var sourceSchema = new DatabaseSchema();
+        var targetSchema = new DatabaseSchema();
+        var table = new TableSchema { Name = "MaskedTable" };
+        table.AddColumn(new ColumnSchema { Name = "MaskedCol", Type = StandardType.Int });
+        targetSchema.AddTable(table);
+
+        var bracketDir = Path.Combine(Path.GetTempPath(), $"[agent_diff_report_{Guid.NewGuid():N}]");
+        Directory.CreateDirectory(bracketDir);
+
+        try
+        {
+            var options = new DiffCommandOptions
+            {
+                Current = "Entities",
+                Target = "schema.mmd",
+                ReportPath = bracketDir
+            };
+
+            var act = () => handler.Execute(sourceSchema, targetSchema, options);
+            act.Should().NotThrow();
+            console.Output.Should().Contain("Warning: Could not write report to");
+            console.Output.Should().Contain(bracketDir);
+        }
+        finally
+        {
+            if (Directory.Exists(bracketDir))
+            {
+                Directory.Delete(bracketDir, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteSync_WhenReportPathHasBracketsAndWriteFails_DisplaysWarningWithoutMarkupParseException()
+    {
+        var console = new TestConsole();
+        console.Profile.Width = 300;
+        var mockApplier = new MockApplier();
+        var registry = new ApplierRegistry();
+        registry.Register(TargetType.CSharp, mockApplier);
+        var handler = new SyncCommandHandler(registry, new SchemaDetectionService(), console);
+
+        var sourceSchema = new DatabaseSchema();
+        var targetSchema = new DatabaseSchema();
+        var table = new TableSchema { Name = "MaskedTable" };
+        table.AddColumn(new ColumnSchema { Name = "MaskedCol", Type = StandardType.Int });
+        targetSchema.AddTable(table);
+
+        var bracketDir = Path.Combine(Path.GetTempPath(), $"[agent_sync_report_{Guid.NewGuid():N}]");
+        Directory.CreateDirectory(bracketDir);
+
+        try
+        {
+            var options = new SyncCommandOptions
+            {
+                Current = "Entities",
+                Target = "schema.mmd",
+                ReportPath = bracketDir,
+                DryRun = true,
+                Yes = true,
+                Interactive = false
+            };
+
+            var act = async () => await handler.ExecuteAsync(sourceSchema, targetSchema, options, TargetType.CSharp);
+            await act.Should().NotThrowAsync();
+            console.Output.Should().Contain("Warning: Could not write report to");
+            console.Output.Should().Contain(bracketDir);
+        }
+        finally
+        {
+            if (Directory.Exists(bracketDir))
+            {
+                Directory.Delete(bracketDir, true);
+            }
+        }
+    }
 }

@@ -276,7 +276,7 @@ public class SyncCommandHandler
             }
             catch (Exception ex)
             {
-                _console.MarkupLine($"[yellow]Warning: Could not write report to '{reportPath}': {Markup.Escape(ex.Message)}[/]");
+                _console.MarkupLine($"[yellow]Warning: Could not write report to '{Markup.Escape(reportPath)}': {Markup.Escape(ex.Message)}[/]");
             }
         }
 
@@ -403,7 +403,7 @@ public class SyncCommandHandler
             }
             catch (Exception ex)
             {
-                _console.MarkupLine($"[yellow]Warning: Could not write report to '{reportPath}': {Markup.Escape(ex.Message)}[/]");
+                _console.MarkupLine($"[yellow]Warning: Could not write report to '{Markup.Escape(reportPath)}': {Markup.Escape(ex.Message)}[/]");
             }
         }
 

@@ -173,7 +173,7 @@ public class DiffCommandHandler
             {
                 if (!string.Equals(options.Output, "json", StringComparison.OrdinalIgnoreCase))
                 {
-                    _console.MarkupLine($"[yellow]Warning: Could not write report to '{reportPath}': {Markup.Escape(ex.Message)}[/]");
+                    _console.MarkupLine($"[yellow]Warning: Could not write report to '{Markup.Escape(reportPath)}': {Markup.Escape(ex.Message)}[/]");
                 }
             }
         }
