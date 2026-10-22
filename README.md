@@ -8,7 +8,8 @@ Universal database and entity schema alignment tool for .NET. SchemaAlign parses
 - **Diff Modes**:
   - `incremental` (default): Designed for sprint diagrams; compares changes while preserving existing unmentioned tables in your codebase.
   - `snapshot`: Treats target schema as the complete source of truth; marks unmentioned tables and columns for removal.
-- **Spectre.Console Visual UI**: Colorized diff summary tables, detailed property-level change trees, and syntax-highlighted unified diff previews.
+- **Spectre.Console Visual UI & Output Truncation**: Colorized diff summary tables, detailed property-level change trees, and syntax-highlighted unified diff previews, with automatic console truncation (capped at 15 tables and 3 file preview panels) to prevent terminal scrollback overflow.
+- **Markdown Diff & Sync Reports**: Auto-exports comprehensive markdown reports to `.schemaalign/diff_report.md` or `.schemaalign/sync_report.md` when changes exceed console limits, or on demand via `-r` / `--report`.
 - **Interactive Sync & Granular Checklist**: Multi-select prompt to toggle individual additions, modifications, and drop operations before applying changes.
 - **Destructive Change Safeguards**: Protects against accidental table and column drops unless explicitly enabled with `--allow-drop`.
 - **In-place Roslyn Entity Rewriter**: Updates existing C# entity classes while preserving custom methods, comments, and formatting.
@@ -37,6 +38,7 @@ dotnet run --project SchemaAlign -- diff --current ./src/Entities --target ./doc
 - `-t`, `--target`: Path to desired/target schema (`.mmd`, `.cs`, etc.; required if not specified in configuration).
 - `-m`, `--mode`: Diff mode (`incremental` [default] or `snapshot`).
 - `-o`, `--output`: Output format (`console` [default], `json`, `markdown`).
+- `-r`, `--report`: File path to write a detailed markdown report (aliases: `--report-file`; auto-exports to `.schemaalign/diff_report.md` when changed tables exceed 15).
 - `--detailed`: Display detailed property-level change tree (types, nullability, lengths).
 - `--table-prefix`: Known table prefix to strip when matching foreign key columns (can be specified multiple times). Aliases: `--table-prefixes`.
 - `--config`: Path to `.schemaalign.json` configuration file.
@@ -51,7 +53,8 @@ dotnet run --project SchemaAlign -- sync --current ./src/Entities --target ./doc
 **Options**:
 - `-c`, `--current`: Path to current/base schema to be updated (`.cs`, entity directory or multi-paths, `.sql`, or database connection string; updates apply to primary path; required if not specified in configuration).
 - `-t`, `--target`: Path to desired/target schema to align toward (required if not specified in configuration).
-- `-o`, `--output-file`: Optional path to export generated .sql migration script to file without applying directly to live database.
+- `-o`, `--output-file`: Path to write the generated SQL Server migration script (e.g. `./migrations/migration.sql`) without applying directly to live database.
+- `-r`, `--report`: File path to write a detailed markdown report (aliases: `--report-file`; auto-exports to `.schemaalign/sync_report.md` when changed tables exceed 15).
 - `-m`, `--mode`: Diff mode (`incremental` [default] or `snapshot`).
 - `-i`, `--interactive`: Run interactive checklist prompt to toggle individual changes (default: `true`).
 - `--allow-drop`: Allow destructive drops (`DROP TABLE`, `DROP COLUMN`) during synchronization.
@@ -144,3 +147,12 @@ When generating or applying SQL Server DDL migrations:
 - **Safe Column Drops**: Before issuing `ALTER TABLE ... DROP COLUMN`, SchemaAlign automatically cleans up any dependent foreign keys in `sys.foreign_key_columns` and default constraints in `sys.default_constraints` attached to the column to avoid SQL Server dependency check violations (`Msg 5074`).
 - **Guarded Foreign Key Additions**: Generated foreign keys include metadata checks verifying that both the referencing column and the referenced primary key column exist before attempting constraint creation, preventing batch aborts (`Msg 1769`) and transaction rollbacks (`Msg 3902`).
 - **Primary Key & Column Resolution**: Resolves actual primary key column names from parent tables across target or source schemas when generic `Id` is supplied, and resolves convention-based foreign key columns matching parent table prefixes.
+
+### Console Output Truncation & Markdown Reports
+
+When diffing or synchronizing large schemas, SchemaAlign caps terminal console output to prevent buffer overflow:
+- **Diff Display**: Truncates console output at 15 changed tables across both summary tables and detailed change trees.
+- **File Preview Panels**: Caps detailed file diff panels at 3 files, rendering a compact summary table with line change metrics for remaining files.
+- **Automatic Markdown Export**: When changed table counts exceed 15, a full Markdown report is automatically exported to `.schemaalign/diff_report.md` (for `diff`) or `.schemaalign/sync_report.md` (for `sync`).
+- **Pre-Prompt Sync Inspection**: In interactive sync mode (`--interactive`), the markdown report is exported before displaying the checklist prompt, allowing inspection of truncated changes before making selections.
+- **Explicit Export**: Use `-r`, `--report`, or `--report-file <path>` to export the full Markdown report to a custom file path at any time.
