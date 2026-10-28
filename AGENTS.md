@@ -24,6 +24,22 @@ re-entry — assume I remember nothing from the scrollback:
 
 When starting any new feature or fix, begin by creating a separate git worktree from the base
 branch and do all work inside it, so parallel agents never overwrite each other's changes.
+
+When creating a new branch, always use the `feature/` prefix followed by a short,
+descriptive, lowercase, hyphen-separated name, including for fixes.
+For example, use `feature/markdown-truncation` with the worktree folder
+`D:\Repo\SchemaAlign-markdown-truncation`.
+
+Always place the new worktree beside the original project folder, under the same parent
+directory. Name it `<project-name>-<feature-slug>`, using a short, descriptive, lowercase,
+hyphen-separated slug derived from the feature or fix.
+For example, if the original project is `D:\Repo\SchemaAlign`, a worktree for fixing markdown
+truncation must be `D:\Repo\SchemaAlign-markdown-truncation`.
+Derive the parent directory and project name from the original project checkout, even when
+working from an existing worktree. Never nest worktrees inside the project or place them in
+an unrelated directory. If the destination already exists, choose a distinct descriptive slug
+or append a numeric suffix; never overwrite an existing folder.
+
 After the work is merged, clean up by removing the worktree. For the next task, create a fresh
 worktree from the latest base branch — don't reuse old trees.
 
@@ -43,18 +59,3 @@ failing test first.
 Never report something as working without running it. "Done" means: relevant tests green,
 typecheck clean, and — for user-facing flows — exercised end to end (e.g. Playwright for web
 flows). If tests fail or a step was skipped, say so plainly with the output.
-
-## Orchestrating the gate (builder/driver split)
-
-- **Builders never drive the gate.** A builder agent builds, commits on its branch, and ends its
-  task with a `HANDOFF: INTENT` paragraph — a thorough statement of what changed and why, for
-  the reviewer. Its large transcript is read once and never resumed for gate-driving.
-- **A fresh tiny driver agent per worktree** (cheap model, few-k-token context) runs the gate:
-  it starts the review with the handed-off intent, monitors progress, and answers the gate's
-  questions.
-- **Gate rules for the driver:** apply auto-fixable findings; approve info-only findings; for
-  anything that needs a human decision, PARK — quote the finding verbatim and end the task so
-  the orchestrator can relay it to me, then resume the driver with my decision. Resume a
-  builder only when a finding needs real code fixes.
-- Never end a subagent's turn while a gate run is active — its background processes are
-  orphaned the moment the turn ends.
