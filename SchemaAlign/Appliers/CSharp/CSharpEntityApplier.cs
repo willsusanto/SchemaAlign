@@ -232,6 +232,7 @@ public class CSharpEntityApplier : ISchemaApplier
 
         var allFiles = allDirs
             .SelectMany(d => Directory.GetFiles(d, "*.cs", SearchOption.AllDirectories))
+            .Concat(csOptions.SourceDirectories.Where(path => File.Exists(path) && path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)))
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") &&
                         !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
             .Distinct(StringComparer.OrdinalIgnoreCase)

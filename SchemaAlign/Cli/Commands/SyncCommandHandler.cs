@@ -45,6 +45,7 @@ public class SyncCommandOptions
     /// Whether to run interactive checklist prompt to toggle individual changes.
     /// </summary>
     public bool Interactive { get; set; } = true;
+    public bool Guided { get; set; }
 
     /// <summary>
     /// Whether to generate and preview diffs without writing modifications to disk.
@@ -144,76 +145,49 @@ public class SyncCommandHandler
     /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public virtual async Task<int> RunAsync(SyncCommandOptions options, CancellationToken cancellationToken = default)
     {
-        // Load config if specified or find in current directory
-        var config = !string.IsNullOrWhiteSpace(options.ConfigFile)
-            ? await ConfigurationLoader.LoadAsync(options.ConfigFile, cancellationToken)
-            : await ConfigurationLoader.FindAndLoadAsync(cancellationToken: cancellationToken);
-
-        if (config != null)
-        {
-            if (string.IsNullOrWhiteSpace(options.Current) && !string.IsNullOrWhiteSpace(config.Current ?? config.Source))
-                options.Current = (config.Current ?? config.Source)!;
-            if (string.IsNullOrWhiteSpace(options.Target) && !string.IsNullOrWhiteSpace(config.Target))
-                options.Target = config.Target;
-            if (string.Equals(options.Mode, "incremental", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(config.Mode))
-                options.Mode = config.Mode;
-            if (!options.AllowDrop && config.AllowDrop.HasValue)
-                options.AllowDrop = config.AllowDrop.Value;
-            if (string.IsNullOrWhiteSpace(options.Namespace) && !string.IsNullOrWhiteSpace(config.CSharp?.Namespace))
-                options.Namespace = config.CSharp.Namespace;
-            if (string.IsNullOrWhiteSpace(options.BaseClass) && !string.IsNullOrWhiteSpace(config.CSharp?.BaseClass))
-                options.BaseClass = config.CSharp.BaseClass;
-            if (config.CSharp?.Usings?.Count > 0)
-            {
-                foreach (var u in config.CSharp.Usings)
-                {
-                    if (!options.Usings.Contains(u)) options.Usings.Add(u);
-                }
-            }
-            if (config.CSharp?.ClassAttributes?.Count > 0)
-            {
-                foreach (var a in config.CSharp.ClassAttributes)
-                {
-                    if (!options.ClassAttributes.Contains(a)) options.ClassAttributes.Add(a);
-                }
-            }
-            if (config.CSharp?.OmitInheritedColumns?.Count > 0)
-            {
-                foreach (var c in config.CSharp.OmitInheritedColumns)
-                {
-                    options.OmitInheritedColumns.Add(c);
-                }
-            }
-            if (!options.UseFileScopedNamespaces.HasValue && config.CSharp?.UseFileScopedNamespaces.HasValue == true)
-                options.UseFileScopedNamespaces = config.CSharp.UseFileScopedNamespaces.Value;
-            if (!options.UseDataAnnotations.HasValue && config.CSharp?.UseDataAnnotations.HasValue == true)
-                options.UseDataAnnotations = config.CSharp.UseDataAnnotations.Value;
-            if (string.IsNullOrWhiteSpace(options.ForeignKeyPlacement) && !string.IsNullOrWhiteSpace(config.CSharp?.ForeignKeyPlacement))
-                options.ForeignKeyPlacement = config.CSharp.ForeignKeyPlacement;
-
-            var configPrefixes = (config.TablePrefixes ?? Enumerable.Empty<string>())
-                .Concat(config.CSharp?.TablePrefixes ?? Enumerable.Empty<string>());
-            foreach (var p in configPrefixes)
-            {
-                if (!options.TablePrefixes.Contains(p, StringComparer.OrdinalIgnoreCase))
-                    options.TablePrefixes.Add(p);
-            }
-        }
-
-        if (string.IsNullOrWhiteSpace(options.Current))
-        {
-            _console.MarkupLine("[red]Error: Current schema path (-c|--current) is required.[/]");
-            return 1;
-        }
-
-        if (string.IsNullOrWhiteSpace(options.Target))
-        {
-            _console.MarkupLine("[red]Error: Target schema path (-t|--target) is required.[/]");
-            return 1;
-        }
-
         try
         {
+            // Load exactly one project configuration.
+            var config = !string.IsNullOrWhiteSpace(options.ConfigFile)
+                ? await ConfigurationLoader.LoadAsync(options.ConfigFile, cancellationToken)
+                : await ConfigurationLoader.FindAndLoadAsync(cancellationToken: cancellationToken);
+
+            if (config != null)
+            {
+                if (string.IsNullOrWhiteSpace(options.Current) && !string.IsNullOrWhiteSpace(config.Current))
+                    options.Current = config.Current;
+                if (string.IsNullOrWhiteSpace(options.Target) && !string.IsNullOrWhiteSpace(config.Target))
+                    options.Target = config.Target;
+                if (string.IsNullOrWhiteSpace(options.Namespace) && !string.IsNullOrWhiteSpace(config.CSharp.Namespace))
+                    options.Namespace = config.CSharp.Namespace;
+                if (string.IsNullOrWhiteSpace(options.BaseClass) && !string.IsNullOrWhiteSpace(config.CSharp.BaseClass))
+                    options.BaseClass = config.CSharp.BaseClass;
+                if (options.Usings.Count == 0) options.Usings = config.CSharp.Usings.ToList();
+                if (options.ClassAttributes.Count == 0) options.ClassAttributes = config.CSharp.ClassAttributes.ToList();
+                if (options.OmitInheritedColumns.Count == 0)
+                    options.OmitInheritedColumns = new HashSet<string>(config.CSharp.OmitInheritedColumns, StringComparer.OrdinalIgnoreCase);
+                if (!options.UseFileScopedNamespaces.HasValue && config.CSharp.UseFileScopedNamespaces.HasValue == true)
+                    options.UseFileScopedNamespaces = config.CSharp.UseFileScopedNamespaces.Value;
+                if (!options.UseDataAnnotations.HasValue && config.CSharp.UseDataAnnotations.HasValue == true)
+                    options.UseDataAnnotations = config.CSharp.UseDataAnnotations.Value;
+                if (string.IsNullOrWhiteSpace(options.ForeignKeyPlacement) && !string.IsNullOrWhiteSpace(config.CSharp.ForeignKeyPlacement))
+                    options.ForeignKeyPlacement = config.CSharp.ForeignKeyPlacement;
+
+                if (options.TablePrefixes.Count == 0) options.TablePrefixes = config.TablePrefixes.ToList();
+            }
+
+            if (string.IsNullOrWhiteSpace(options.Current))
+            {
+                _console.MarkupLine("[red]Error: Current schema path (-c|--current) is required.[/]");
+                return 1;
+            }
+
+            if (string.IsNullOrWhiteSpace(options.Target))
+            {
+                _console.MarkupLine("[red]Error: Target schema path (-t|--target) is required.[/]");
+                return 1;
+            }
+
             var mermaidOptions = options.TablePrefixes.Count > 0
                 ? new MermaidReaderOptions { TablePrefixes = options.TablePrefixes.ToList() }
                 : null;
@@ -273,6 +247,8 @@ public class SyncCommandHandler
             }
         }
 
+        ComparisonSetupRenderer.Render(_console, options.Current, options.Target, options.Mode, sync: true);
+
         if (!diff.HasChanges)
         {
             _console.MarkupLine("[green]✔ Current schema is already aligned with desired target. No changes needed.[/]");
@@ -287,6 +263,13 @@ public class SyncCommandHandler
         if (hasDestructive)
         {
             _console.MarkupLine("\n[bold red]⚠️  Warning: Destructive schema changes (DROP TABLE or DROP COLUMN) were detected.[/]");
+        }
+
+        if (hasDestructive && options.Guided && options.Interactive && !options.AllowDrop)
+        {
+            options.AllowDrop = _console.Confirm("Include destructive removals in this review?", defaultValue: false);
+            if (!options.AllowDrop) diff = DiffFilter.Filter(diff, allowDrops: false);
+            if (!diff.HasChanges) return 0;
         }
 
         // Handle filtering / interactivity
@@ -320,7 +303,9 @@ public class SyncCommandHandler
             return 1;
         }
 
-        var currentPaths = options.Current.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var currentPaths = IsConnectionString(options.Current)
+            ? new[] { options.Current }
+            : options.Current.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var primaryTargetDir = currentPaths.Length > 0 ? currentPaths[0] : options.Current;
 
         ApplierOptions applierOptions;
@@ -460,6 +445,13 @@ public class SyncCommandHandler
                     return 0;
                 }
             }
+        }
+        else if (options.Guided && !options.Yes)
+        {
+            var action = _console.Prompt(new SelectionPrompt<string>()
+                .Title("[bold]What would you like to do with these changes?[/]")
+                .AddChoices("1. Finish preview without applying", "2. Apply changes", "3. Cancel"));
+            if (!action.StartsWith("2")) return 0;
         }
         else if (!options.Yes)
         {

@@ -11,38 +11,9 @@ public class SchemaAlignConfiguration
     public string? Current { get; set; }
 
     /// <summary>
-    /// Legacy alias for Current.
-    /// </summary>
-    public string? Source
-    {
-        get => Current;
-        set => Current = value;
-    }
-
-    /// <summary>
     /// Path to desired/target schema (e.g. .mmd diagram or new spec).
     /// </summary>
     public string? Target { get; set; }
-
-    /// <summary>
-    /// Diff mode: 'incremental' or 'snapshot'.
-    /// </summary>
-    public string? Mode { get; set; }
-
-    /// <summary>
-    /// Whether destructive drops (DROP TABLE, DROP COLUMN) are permitted.
-    /// </summary>
-    public bool? AllowDrop { get; set; }
-
-    /// <summary>
-    /// Output format ('console', 'json', 'markdown').
-    /// </summary>
-    public string? Output { get; set; }
-
-    /// <summary>
-    /// Whether to display detailed property-level change trees.
-    /// </summary>
-    public bool? Detailed { get; set; }
 
     /// <summary>
     /// Table prefixes to strip when matching foreign key columns, generating SQL Server foreign keys, and deriving navigation property names (e.g. ["ms", "lt", "tr"] or ["tbl_"]).
@@ -54,7 +25,6 @@ public class SchemaAlignConfiguration
     /// </summary>
     public CSharpConfiguration CSharp { get; set; } = new();
 }
-
 
 /// <summary>
 /// C# entity applier and generator configuration settings.
@@ -101,8 +71,4 @@ public class CSharpConfiguration
     /// </summary>
     public string? ForeignKeyPlacement { get; set; }
 
-    /// <summary>
-    /// Table prefixes to strip when matching foreign key columns, generating SQL Server foreign keys, and deriving navigation property names (e.g. ["ms", "lt", "tr"] or ["tbl_"]).
-    /// </summary>
-    public List<string> TablePrefixes { get; set; } = new();
 }

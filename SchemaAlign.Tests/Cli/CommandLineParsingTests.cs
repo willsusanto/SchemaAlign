@@ -9,6 +9,50 @@ namespace SchemaAlign.Tests.Cli;
 
 public class CommandLineParsingTests
 {
+    [Theory]
+    [InlineData("sync", "--namespace", "Masked.Entities")]
+    [InlineData("sync", "--ns", "Masked.Entities")]
+    [InlineData("sync", "--base-class", "MaskedBase")]
+    [InlineData("sync", "--using", "Masked.Core")]
+    [InlineData("sync", "--class-attribute", "MaskedMarker")]
+    [InlineData("sync", "--class-attr", "MaskedMarker")]
+    [InlineData("sync", "--foreign-key-placement", "scalar")]
+    [InlineData("sync", "--fk-placement", "scalar")]
+    [InlineData("sync", "--table-prefix", "masked_")]
+    [InlineData("diff", "--table-prefixes", "masked_")]
+    [InlineData("sync", "--interactive", "false")]
+    [InlineData("sync", "--no-drop", "")]
+    [InlineData("diff", "--report-file", "masked.md")]
+    [InlineData("sync", "--report-file", "masked.md")]
+    public void RemovedOptions_AreRejected(string command, string option, string value)
+    {
+        var arguments = new List<string> { command, "-c", "masked.cs", "-t", "masked.mmd", option };
+        if (value.Length > 0) arguments.Add(value);
+        var result = CommandLineConfiguration.CreateRootCommand().Parse(arguments.ToArray());
+        result.Errors.Should().NotBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("diff", "--mode", "invalid")]
+    [InlineData("sync", "--mode", "invalid")]
+    [InlineData("diff", "--output", "invalid")]
+    [InlineData("inspect", "--output", "markdown")]
+    public void InvalidChoice_IsRejectedBeforeRunningHandler(string command, string option, string value)
+    {
+        var result = CommandLineConfiguration.CreateRootCommand().Parse(new[] { command, "-c", "masked.cs", option, value });
+        result.Errors.Should().NotBeEmpty();
+    }
+    [Theory]
+    [InlineData("diff", "--current,--target,--mode,--output,--detailed,--config,--report")]
+    [InlineData("sync", "--current,--target,--output-file,--mode,--allow-drop,--dry-run,--yes,--config,--report")]
+    [InlineData("inspect", "--current,--output")]
+    public void Commands_ExposeOnlyTheDocumentedOptions(string command, string names)
+    {
+        var root = CommandLineConfiguration.CreateRootCommand();
+        var selected = root.Subcommands.Single(item => item.Name == command);
+        selected.Options.Where(option => option.Name != "--help").Select(option => option.Name)
+            .Should().BeEquivalentTo(names.Split(','));
+    }
     [Fact]
     public async Task DiffCommand_ParsesArgumentsAndDefaultsToIncrementalMode()
     {
@@ -101,7 +145,7 @@ public class CommandLineParsingTests
     }
 
     [Fact]
-    public async Task SyncCommand_ParsesAllowDropAndNoDropFlags()
+    public async Task SyncCommand_ParsesAllowDropFlag()
     {
         SyncCommandOptions? capturedOptions = null;
 
@@ -119,60 +163,6 @@ public class CommandLineParsingTests
         capturedOptions!.Current.Should().Be("schema.mmd");
         capturedOptions.Target.Should().Be("./Entities");
         capturedOptions.AllowDrop.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task SyncCommand_ParsesNamespaceFlag()
-    {
-        SyncCommandOptions? capturedOptions = null;
-
-        var mockHandler = new TestSyncHandler(opts =>
-        {
-            capturedOptions = opts;
-            return Task.FromResult(0);
-        });
-
-        var root = CommandLineConfiguration.CreateRootCommand(syncHandler: mockHandler);
-        var exitCode = await root.Parse("sync -c schema.mmd -t ./Entities --namespace MockOrg.Data.Entities").InvokeAsync();
-
-        exitCode.Should().Be(0);
-        capturedOptions.Should().NotBeNull();
-        capturedOptions!.Current.Should().Be("schema.mmd");
-        capturedOptions.Target.Should().Be("./Entities");
-        capturedOptions.Namespace.Should().Be("MockOrg.Data.Entities");
-    }
-
-    [Fact]
-    public async Task SyncCommand_ParsesConfigBaseClassUsingsAndAttributesFlags()
-    {
-        SyncCommandOptions? capturedOptions = null;
-
-        var mockHandler = new TestSyncHandler(opts =>
-        {
-            capturedOptions = opts;
-            return Task.FromResult(0);
-        });
-
-        var root = CommandLineConfiguration.CreateRootCommand(syncHandler: mockHandler);
-        var exitCode = await root.Parse(new[]
-        {
-            "sync", "-c", "schema.mmd", "-t", "./Entities",
-            "--config", "custom_config.json",
-            "--base-class", "MockEntityBase",
-            "--using", "MockOrg.Core",
-            "--using", "MockOrg.Pattern",
-            "--class-attr", "[CustomGroup(\"Core\")]"
-        }).InvokeAsync();
-
-        exitCode.Should().Be(0);
-        capturedOptions.Should().NotBeNull();
-        capturedOptions!.Current.Should().Be("schema.mmd");
-        capturedOptions.Target.Should().Be("./Entities");
-        capturedOptions.ConfigFile.Should().Be("custom_config.json");
-        capturedOptions.BaseClass.Should().Be("MockEntityBase");
-        capturedOptions.Usings.Should().Contain("MockOrg.Core");
-        capturedOptions.Usings.Should().Contain("MockOrg.Pattern");
-        capturedOptions.ClassAttributes.Should().Contain("[CustomGroup(\"Core\")]");
     }
 
     [Fact]

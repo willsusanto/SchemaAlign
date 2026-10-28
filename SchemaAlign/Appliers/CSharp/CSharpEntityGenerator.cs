@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Text;
 using SchemaAlign.Models;
 using SchemaAlign.Models.TypeMapping;
@@ -120,17 +122,25 @@ public static class CSharpEntityGenerator
             sb.AppendLine($"{indent}/// </summary>");
         }
 
-        // Custom class attributes (e.g. [DatabaseName("...")] or [CustomMarker])
-        foreach (var attr in options.ClassAttributes)
-        {
-            if (string.IsNullOrWhiteSpace(attr)) continue;
-            var trimmed = attr.Trim();
-            var formattedAttr = trimmed.StartsWith("[") && trimmed.EndsWith("]") ? trimmed : $"[{trimmed}]";
-            sb.AppendLine($"{indent}{formattedAttr}");
-        }
+        // Custom mappings take precedence over the automatic table mapping.
+        var attributes = options.ClassAttributes
+            .Where(attr => !string.IsNullOrWhiteSpace(attr))
+            .Select(attr =>
+            {
+                var value = attr.Trim();
+                return value.StartsWith("[") && value.EndsWith("]") ? value : $"[{value}]";
+            })
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        foreach (var attribute in attributes)
+            sb.AppendLine($"{indent}{attribute}");
 
-        // [Table] attribute
-        if (options.UseDataAnnotations)
+        var hasTableAttribute = attributes.Any(attribute =>
+            SyntaxFactory.ParseCompilationUnit(attribute + " class MaskedEntity {}")
+                .DescendantNodes().OfType<AttributeSyntax>()
+                .Any(node => node.Name.ToString().Split('.').Last() is "Table" or "TableAttribute"));
+
+        if (options.UseDataAnnotations && !hasTableAttribute)
         {
             if (options.AddSchemaToTableAttribute || (!string.IsNullOrEmpty(table.Schema) && !string.Equals(table.Schema, "dbo", StringComparison.OrdinalIgnoreCase)))
             {

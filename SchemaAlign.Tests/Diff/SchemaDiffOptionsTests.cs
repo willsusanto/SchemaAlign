@@ -5,6 +5,36 @@ namespace SchemaAlign.Tests.Diff;
 
 public class SchemaDiffOptionsTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Calculate_Modes_AlwaysReportOmittedColumnsButOnlySnapshotRemovesOmittedForeignKeys(bool snapshot)
+    {
+        var source = new DatabaseSchema();
+        var current = new TableSchema { Name = "MaskedRecord" };
+        current.AddColumn(new ColumnSchema { Name = "MaskedKey", Type = StandardType.Int });
+        current.AddColumn(new ColumnSchema { Name = "MaskedPriorColumn", Type = StandardType.String });
+        current.ForeignKeys.Add(new ForeignKeySchema
+        {
+            ConstraintName = "MaskedRelationship",
+            DependentTable = "MaskedRecord",
+            DependentColumn = "MaskedKey",
+            PrincipalTable = "MaskedParent",
+            PrincipalColumn = "MaskedKey"
+        });
+        source.AddTable(current);
+        var target = new DatabaseSchema();
+        var desired = new TableSchema { Name = "MaskedRecord" };
+        desired.AddColumn(new ColumnSchema { Name = "MaskedKey", Type = StandardType.Int });
+        target.AddTable(desired);
+
+        var result = SchemaDiffCalculator.Calculate(source, target,
+            snapshot ? SchemaDiffOptions.FullSnapshot : SchemaDiffOptions.Incremental);
+
+        var changes = result.FindTable("MaskedRecord")!;
+        changes.DeletedColumns.Should().ContainSingle(column => column.ColumnName == "MaskedPriorColumn");
+        changes.ForeignKeys.Count(key => key.Kind == DiffKind.Deleted).Should().Be(snapshot ? 1 : 0);
+    }
     [Fact]
     public void Calculate_IncrementalMode_OmitsDeletedTablesAndForeignKeys()
     {

@@ -39,10 +39,11 @@ public static class CommandLineConfiguration
 
         var diffModeOpt = new Option<string>("--mode")
         {
-            Description = "Diff mode: 'incremental' (default: sprint diagram, preserves unmentioned tables) or 'snapshot' (full replacement)",
+            Description = "Diff mode: 'incremental' (default: sprint tables; include all desired columns) or 'snapshot' (complete system)",
             DefaultValueFactory = _ => "incremental"
         };
         diffModeOpt.Aliases.Add("-m");
+        diffModeOpt.AcceptOnlyFromAmong("incremental", "snapshot");
 
         var diffOutputOpt = new Option<string>("--output")
         {
@@ -50,6 +51,7 @@ public static class CommandLineConfiguration
             DefaultValueFactory = _ => "console"
         };
         diffOutputOpt.Aliases.Add("-o");
+        diffOutputOpt.AcceptOnlyFromAmong("console", "json", "markdown", "md");
 
         var diffDetailedOpt = new Option<bool>("--detailed")
         {
@@ -62,18 +64,11 @@ public static class CommandLineConfiguration
             Description = "Path to .schemaalign.json configuration file"
         };
 
-        var diffTablePrefixOpt = new Option<string[]>("--table-prefix")
-        {
-            Description = "Table prefixes to strip when matching foreign key columns (can be specified multiple times)"
-        };
-        diffTablePrefixOpt.Aliases.Add("--table-prefixes");
-
         var diffReportOpt = new Option<string?>("--report")
         {
             Description = "File path to write a detailed markdown report"
         };
         diffReportOpt.Aliases.Add("-r");
-        diffReportOpt.Aliases.Add("--report-file");
 
         var diffCommand = new Command("diff", "Compare current schema against desired target schema non-destructively")
         {
@@ -83,7 +78,6 @@ public static class CommandLineConfiguration
             diffOutputOpt,
             diffDetailedOpt,
             diffConfigOpt,
-            diffTablePrefixOpt,
             diffReportOpt
         };
 
@@ -98,7 +92,6 @@ public static class CommandLineConfiguration
                 Output = parseResult.GetValue(diffOutputOpt) ?? "console",
                 Detailed = parseResult.GetValue(diffDetailedOpt),
                 ConfigFile = parseResult.GetValue(diffConfigOpt),
-                TablePrefixes = (parseResult.GetValue(diffTablePrefixOpt) ?? Array.Empty<string>()).ToList(),
                 ReportPath = parseResult.GetValue(diffReportOpt)
             };
             return await handler.RunAsync(options);
@@ -125,20 +118,15 @@ public static class CommandLineConfiguration
 
         var syncModeOpt = new Option<string>("--mode")
         {
-            Description = "Diff mode: 'incremental' (default: sprint diagram, preserves unmentioned tables) or 'snapshot'",
+            Description = "Diff mode: 'incremental' (default: sprint tables; include all desired columns) or 'snapshot' (complete system)",
             DefaultValueFactory = _ => "incremental"
         };
         syncModeOpt.Aliases.Add("-m");
+        syncModeOpt.AcceptOnlyFromAmong("incremental", "snapshot");
 
         var syncAllowDropOpt = new Option<bool>("--allow-drop")
         {
             Description = "Allow destructive drops (DROP TABLE, DROP COLUMN) during synchronization",
-            DefaultValueFactory = _ => false
-        };
-
-        var syncNoDropOpt = new Option<bool>("--no-drop")
-        {
-            Description = "Explicitly block destructive drops (default in automated mode)",
             DefaultValueFactory = _ => false
         };
 
@@ -155,58 +143,16 @@ public static class CommandLineConfiguration
         };
         syncYesOpt.Aliases.Add("-y");
 
-        var syncInteractiveOpt = new Option<bool>("--interactive")
-        {
-            Description = "Run interactive checklist prompt to toggle individual changes",
-            DefaultValueFactory = _ => true
-        };
-        syncInteractiveOpt.Aliases.Add("-i");
-
-        var syncNamespaceOpt = new Option<string?>("--namespace")
-        {
-            Description = "Target C# namespace for generated entities (defaults to auto-detection from source files or 'Entities')"
-        };
-        syncNamespaceOpt.Aliases.Add("--ns");
-
         var syncConfigOpt = new Option<string?>("--config")
         {
             Description = "Path to .schemaalign.json configuration file"
         };
-
-        var syncBaseClassOpt = new Option<string?>("--base-class")
-        {
-            Description = "Base class for newly generated C# entity classes (e.g. AuditEntity)"
-        };
-
-        var syncUsingOpt = new Option<string[]>("--using")
-        {
-            Description = "Additional using namespace directives to add to generated entity files (can be specified multiple times)"
-        };
-
-        var syncClassAttrOpt = new Option<string[]>("--class-attribute")
-        {
-            Description = "Custom class-level attributes to emit on generated entity classes (can be specified multiple times)"
-        };
-        syncClassAttrOpt.Aliases.Add("--class-attr");
-
-        var syncFkPlacementOpt = new Option<string?>("--foreign-key-placement")
-        {
-            Description = "Placement of the [ForeignKey] data annotation attribute ('scalar' or 'navigation')"
-        };
-        syncFkPlacementOpt.Aliases.Add("--fk-placement");
-
-        var syncTablePrefixOpt = new Option<string[]>("--table-prefix")
-        {
-            Description = "Table prefixes to strip when matching foreign key columns and generating navigation properties (can be specified multiple times)"
-        };
-        syncTablePrefixOpt.Aliases.Add("--table-prefixes");
 
         var syncReportOpt = new Option<string?>("--report")
         {
             Description = "File path to write a detailed markdown report"
         };
         syncReportOpt.Aliases.Add("-r");
-        syncReportOpt.Aliases.Add("--report-file");
 
         var syncCommand = new Command("sync", "Synchronize current schema to match desired target schema")
         {
@@ -215,17 +161,9 @@ public static class CommandLineConfiguration
             syncOutputFileOpt,
             syncModeOpt,
             syncAllowDropOpt,
-            syncNoDropOpt,
             syncDryRunOpt,
             syncYesOpt,
-            syncInteractiveOpt,
-            syncNamespaceOpt,
             syncConfigOpt,
-            syncBaseClassOpt,
-            syncUsingOpt,
-            syncClassAttrOpt,
-            syncFkPlacementOpt,
-            syncTablePrefixOpt,
             syncReportOpt
         };
 
@@ -233,14 +171,6 @@ public static class CommandLineConfiguration
         {
             var handler = syncHandler ?? new SyncCommandHandler();
             var allowDrop = parseResult.GetValue(syncAllowDropOpt);
-            if (parseResult.GetValue(syncNoDropOpt))
-            {
-                allowDrop = false;
-            }
-
-            var usings = (parseResult.GetValue(syncUsingOpt) ?? Array.Empty<string>()).ToList();
-            var classAttrs = (parseResult.GetValue(syncClassAttrOpt) ?? Array.Empty<string>()).ToList();
-            var tablePrefixes = (parseResult.GetValue(syncTablePrefixOpt) ?? Array.Empty<string>()).ToList();
 
             var options = new SyncCommandOptions
             {
@@ -251,14 +181,9 @@ public static class CommandLineConfiguration
                 AllowDrop = allowDrop,
                 DryRun = parseResult.GetValue(syncDryRunOpt),
                 Yes = parseResult.GetValue(syncYesOpt),
-                Interactive = parseResult.GetValue(syncInteractiveOpt) && !parseResult.GetValue(syncYesOpt),
-                Namespace = parseResult.GetValue(syncNamespaceOpt),
+                Interactive = !parseResult.GetValue(syncYesOpt),
+                Guided = !parseResult.GetValue(syncYesOpt),
                 ConfigFile = parseResult.GetValue(syncConfigOpt),
-                BaseClass = parseResult.GetValue(syncBaseClassOpt),
-                Usings = usings,
-                ClassAttributes = classAttrs,
-                ForeignKeyPlacement = parseResult.GetValue(syncFkPlacementOpt),
-                TablePrefixes = tablePrefixes,
                 ReportPath = parseResult.GetValue(syncReportOpt)
             };
             return await handler.RunAsync(options);
@@ -278,6 +203,7 @@ public static class CommandLineConfiguration
             DefaultValueFactory = _ => "console"
         };
         inspectOutputOpt.Aliases.Add("-o");
+        inspectOutputOpt.AcceptOnlyFromAmong("console", "json");
 
         var inspectCommand = new Command("inspect", "Inspect and display parsed schema tables and columns")
         {

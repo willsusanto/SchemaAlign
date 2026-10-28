@@ -1,4 +1,5 @@
 using SchemaAlign.Appliers;
+using SchemaAlign.Configuration;
 using SchemaAlign.Cli.Services;
 using Spectre.Console;
 
@@ -13,14 +14,17 @@ public class WizardCommandHandler
     private readonly SyncCommandHandler _syncHandler;
     private readonly InspectCommandHandler _inspectHandler;
     private readonly IAnsiConsole _console;
+    private readonly string? _configFile;
 
     public WizardCommandHandler(
         DiffCommandHandler? diffHandler = null,
         SyncCommandHandler? syncHandler = null,
         InspectCommandHandler? inspectHandler = null,
-        IAnsiConsole? console = null)
+        IAnsiConsole? console = null,
+        string? configFile = null)
     {
         _console = console ?? AnsiConsole.Console;
+        _configFile = configFile;
         var detection = new SchemaDetectionService();
         var registry = new ApplierRegistry();
 
@@ -50,62 +54,73 @@ public class WizardCommandHandler
         if (action.StartsWith("4"))
             return 0;
 
-        _console.MarkupLine($"[grey]Relative paths start from: {Markup.Escape(Directory.GetCurrentDirectory())}[/]");
-
-        if (action.StartsWith("3"))
+        try
         {
-            var current = AskSchemaInput("[bold]Enter schema path (e.g. schema.mmd, ./Entities, or script.sql):[/]");
-            return await _inspectHandler.RunAsync(new InspectCommandOptions { Current = current }, cancellationToken);
-        }
+            var configPath = _configFile ?? ConfigurationLoader.FindConfigFile();
+            var config = configPath == null ? null : await ConfigurationLoader.LoadAsync(configPath, cancellationToken);
+            _console.MarkupLine($"[grey]Relative paths start from: {Markup.Escape(Directory.GetCurrentDirectory())}[/]");
 
-        var currentPath = AskSchemaInput("[bold]Enter Current schema path (e.g. ./src/Entities or live DB):[/]");
-        var targetPath = AskSchemaInput("[bold]Enter Desired target schema path (e.g. schema.mmd or new spec):[/]");
-
-        var modeChoice = _console.Prompt(
-            new SelectionPrompt<string>()
-                .Title("[bold]Select diff mode:[/]")
-                .AddChoices("1. Incremental Mode (Recommended: Sprint diagram; preserves unmentioned tables in current codebase)",
-                            "2. Full Snapshot Mode (Desired schema is exact full truth; marks tables omitted from desired spec as deleted)"));
-
-        var mode = modeChoice.StartsWith("1") ? "incremental" : "snapshot";
-
-        if (action.StartsWith("1"))
-        {
-            var detailed = _console.Confirm("Show detailed property-level change tree?", defaultValue: true);
-            return await _diffHandler.RunAsync(new DiffCommandOptions
+            if (action.StartsWith("3"))
             {
-                Current = currentPath,
-                Target = targetPath,
-                Mode = mode,
-                Detailed = detailed
-            }, cancellationToken);
-        }
+                var current = AskSchemaInput("[bold]Enter schema path (e.g. schema.mmd, ./Entities, or script.sql):[/]", config?.Current);
+                return await _inspectHandler.RunAsync(new InspectCommandOptions { Current = current, TablePrefixes = config?.TablePrefixes.ToList() ?? new() }, cancellationToken);
+            }
 
-        if (action.StartsWith("2"))
-        {
-            var allowDrops = _console.Confirm("Allow destructive drops (DROP TABLE / DROP COLUMN) if selected in checklist?", defaultValue: false);
-            var dryRun = _console.Confirm("Run in Dry-Run preview mode first?", defaultValue: false);
+            var currentPath = AskSchemaInput("[bold]Enter Current schema path (e.g. ./src/Entities or live DB):[/]", config?.Current);
+            var targetPath = AskSchemaInput("[bold]Enter Desired target schema path (e.g. schema.mmd or new spec):[/]", config?.Target);
 
-            return await _syncHandler.RunAsync(new SyncCommandOptions
+            var modeChoice = _console.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("[bold]What does your desired schema describe?[/]")
+                    .AddChoices("1. This sprint's tables (Incremental): preserve other tables; include every desired column in each listed table",
+                                "2. The complete system (Snapshot): report omitted tables, columns, and relationships for removal"));
+
+            var mode = modeChoice.StartsWith("1") ? "incremental" : "snapshot";
+            _console.MarkupLine("[grey]Incremental preserves omitted tables and foreign keys; omitted columns in included tables are reported for removal.[/]");
+
+            if (action.StartsWith("1"))
             {
-                Current = currentPath,
-                Target = targetPath,
-                Mode = mode,
-                AllowDrop = allowDrops,
-                DryRun = dryRun,
-                Interactive = true,
-                Yes = false
-            }, cancellationToken);
-        }
+                return await _diffHandler.RunAsync(new DiffCommandOptions
+                {
+                    Current = currentPath,
+                    Target = targetPath,
+                    Mode = mode,
+                    Detailed = true,
+                    ConfigFile = configPath
+                }, cancellationToken);
+            }
 
-        return 0;
+            if (action.StartsWith("2"))
+            {
+
+                return await _syncHandler.RunAsync(new SyncCommandOptions
+                {
+                    Current = currentPath,
+                    Target = targetPath,
+                    Mode = mode,
+                    ConfigFile = configPath,
+                    Guided = true,
+
+                    Interactive = true,
+                    Yes = false
+                }, cancellationToken);
+            }
+
+            return 0;
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            _console.MarkupLine($"[red]Configuration or input error: {Markup.Escape(ex.Message)}[/]");
+            return 1;
+        }
     }
 
-    private string AskSchemaInput(string prompt)
+    private string AskSchemaInput(string prompt, string? configured = null)
     {
         while (true)
         {
-            var input = _console.Ask<string>(prompt);
+            var input = configured ?? _console.Ask<string>(prompt);
+            configured = null;
             try
             {
                 return SchemaInputValidator.ValidateAndNormalize(input);
