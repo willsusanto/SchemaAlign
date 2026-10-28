@@ -151,8 +151,9 @@ When generating or applying SQL Server DDL migrations:
 ### Console Output Truncation & Markdown Reports
 
 When diffing or synchronizing large schemas, SchemaAlign caps terminal console output to prevent buffer overflow:
-- **Diff Display**: Truncates console output at 15 changed tables across both summary tables and detailed change trees.
-- **File Preview Panels**: Caps detailed file diff panels at 3 files, rendering a compact summary table with line change metrics for remaining files.
+- **Diff Display**: Truncates console output at 15 changed tables across both summary tables and detailed change trees when a report has been saved. If automatic report export fails, all changed tables remain visible.
+- **File Preview Panels**: When more than 3 files change and their full diffs have been saved in a report, displays a compact summary table with line change metrics. Without a saved preview report, every detailed file diff remains visible before confirmation.
 - **Automatic Markdown Export**: When changed table counts exceed 15, a full Markdown report is automatically exported to `.schemaalign/diff_report.md` (for `diff`) or `.schemaalign/sync_report.md` (for `sync`).
-- **Pre-Prompt Sync Inspection**: In interactive sync mode (`--interactive`), the markdown report is exported before displaying the checklist prompt, allowing inspection of truncated changes before making selections.
-- **Explicit Export**: Use `-r`, `--report`, or `--report-file <path>` to export the full Markdown report to a custom file path at any time.
+- **Pre-Prompt Sync Inspection**: When a report is requested or automatically exported, interactive sync mode (`--interactive`) writes it before displaying the checklist prompt, allowing inspection of truncated changes before making selections.
+- **Explicit Export**: Use `-r`, `--report`, or `--report-file <path>` to export the full Markdown report to a custom file path, including an up-to-date report when no changes are needed. Failure to write an explicitly requested report returns a nonzero exit code; sync stops before applying changes.
+- **Output and Privacy**: Report titles replace database connection strings with a generic label. JSON and Markdown stdout contain only the requested format; report-write diagnostics go to stderr for these formats.

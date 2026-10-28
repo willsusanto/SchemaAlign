@@ -14,7 +14,7 @@ public static class PreviewConsoleRenderer
     /// <param name="previews">Collection of file diff previews.</param>
     /// <param name="console">The AnsiConsole instance.</param>
     /// <param name="maxDetailedPanels">Maximum number of full diff panels to render before switching to compact summary table.</param>
-    /// <param name="reportPath">Optional path to the exported markdown report for reference.</param>
+    /// <param name="reportPath">Optional path to a successfully saved markdown report containing every preview.</param>
     public static void RenderPreviews(IReadOnlyList<FileDiffPreview> previews, IAnsiConsole console, int maxDetailedPanels = 3, string? reportPath = null)
     {
         if (previews.Count == 0)
@@ -23,7 +23,8 @@ public static class PreviewConsoleRenderer
             return;
         }
 
-        if (previews.Count > maxDetailedPanels)
+        // Only hide textual diffs once they are available in a successfully saved report.
+        if (previews.Count > maxDetailedPanels && !string.IsNullOrWhiteSpace(reportPath))
         {
             console.MarkupLine($"[bold blue]File Preview Summary ({previews.Count} files):[/]\n");
             var table = new Table().Border(TableBorder.Rounded);
@@ -50,14 +51,7 @@ public static class PreviewConsoleRenderer
 
             console.Write(table);
 
-            if (!string.IsNullOrWhiteSpace(reportPath))
-            {
-                console.MarkupLine($"\n[bold blue]Full unified diffs written to:[/] [underline]{Markup.Escape(reportPath)}[/]");
-            }
-            else
-            {
-                console.MarkupLine("\n[grey]Tip: Specify --report to export full unified diffs to a file.[/]");
-            }
+            console.MarkupLine($"\n[bold blue]Full unified diffs written to:[/] [underline]{Markup.Escape(reportPath)}[/]");
             return;
         }
 
