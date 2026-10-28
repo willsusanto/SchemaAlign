@@ -218,7 +218,7 @@ public class SchemaDetectionService
         throw new NotSupportedException($"Schema format for '{pathOrConnectionString}' is not supported. Supported formats: .mmd, .mermaid, .cs, C# entity directory, .sql, or SQL connection strings.");
     }
 
-    private static bool IsConnectionString(string str)
+    internal static bool IsConnectionString(string str)
     {
         return str.Contains("Server=", StringComparison.OrdinalIgnoreCase) ||
                str.Contains("Data Source=", StringComparison.OrdinalIgnoreCase) ||
