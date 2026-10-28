@@ -24,6 +24,42 @@ Run `SchemaAlign` with no arguments to start the interactive console wizard:
 dotnet run --project SchemaAlign
 ```
 
+### Choosing C# Entity Paths in the Wizard
+
+For projects with models for several databases, scan the entity folder for the database you want to compare, together with the source files for its base classes. The following project, class, and folder names are placeholders; replace them with your own paths.
+
+For example, a project might contain:
+
+```text
+D:\Repo\ExampleApi\Model\
+  PrimaryDB\                 Entities for the primary database
+  SecondaryDB\               Entities for a separate database
+  Base\MaskedAuditBase.cs    Shared abstract base class
+  Request\                   Request models
+  Response\                  Response models
+```
+
+If the primary database entities inherit from `MaskedAuditBase`, enter both paths as one line at the wizard's schema-path prompt:
+
+```text
+D:\Repo\ExampleApi\Model\PrimaryDB;D:\Repo\ExampleApi\Model\Base\MaskedAuditBase.cs
+```
+
+SchemaAlign accepts semicolon-separated or comma-separated file and directory paths. It reads the selected sources together and includes supported inherited properties and their mapping annotations in each derived entity's schema. The diff then compares those inherited properties as ordinary columns.
+
+- Scanning only `PrimaryDB` omits inherited properties when the base-class source is outside that folder.
+- Scanning the parent `Model` folder recursively includes other database models, request models, and response models, which may be interpreted as tables.
+- Include the exact base-class source file where possible. Scanning the entire `Base` folder can also include unrelated concrete classes as tables.
+- To compare the secondary database, select `SecondaryDB` instead and include the base-class sources its entities require.
+
+The same input works with the CLI. Quote the combined path so the shell passes it as one argument:
+
+```powershell
+dotnet run --project SchemaAlign -- inspect --current "D:\Repo\ExampleApi\Model\PrimaryDB;D:\Repo\ExampleApi\Model\Base\MaskedAuditBase.cs"
+```
+
+A `using` directive or the `csharp.baseClass` configuration setting does not load additional source files. Include every required base-class source explicitly. The current reader matches base classes by short name; qualified names, aliases, duplicate class names, and generic type arguments have resolution limitations. Properties declared only in referenced assemblies are not inspected.
+
 ### Commands
 
 #### `diff`
