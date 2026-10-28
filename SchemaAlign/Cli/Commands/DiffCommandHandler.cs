@@ -47,6 +47,11 @@ public class DiffCommandOptions
     /// Table prefixes to strip when matching foreign key columns (e.g. "ms", "lt", "tr").
     /// </summary>
     public List<string> TablePrefixes { get; set; } = new();
+
+    /// <summary>
+    /// Path to export a markdown diff report to.
+    /// </summary>
+    public string? ReportPath { get; set; }
 }
 
 /// <summary>
@@ -143,6 +148,43 @@ public class DiffCommandHandler
         // Diff is calculated from source (current base) to target (desired state)
         var diff = SchemaDiffCalculator.Calculate(sourceSchema, targetSchema, diffOptions);
 
+        var reportPath = options.ReportPath;
+        var explicitReport = !string.IsNullOrWhiteSpace(reportPath);
+        var reportFailed = false;
+        string? writtenReportPath = null;
+        var machineOutput = options.Output.Equals("json", StringComparison.OrdinalIgnoreCase)
+            || options.Output.Equals("markdown", StringComparison.OrdinalIgnoreCase)
+            || options.Output.Equals("md", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(reportPath) && diff.HasChanges && diff.Tables.Count(t => t.HasChanges) > 15)
+        {
+            reportPath = Path.Combine(".schemaalign", "diff_report.md");
+        }
+
+        if (!string.IsNullOrWhiteSpace(reportPath))
+        {
+            try
+            {
+                MarkdownReportWriter.Write(reportPath, diff, "Schema Diff", options.Current, options.Target);
+                writtenReportPath = reportPath;
+                if (!machineOutput)
+                {
+                    _console.MarkupLine($"[green]✔ Full markdown report written to:[/] [underline]{Markup.Escape(reportPath)}[/]\n");
+                }
+            }
+            catch (Exception ex)
+            {
+                reportFailed = true;
+                if (machineOutput)
+                {
+                    Console.Error.WriteLine($"Warning: Could not write report to '{reportPath}': {ex.Message}");
+                }
+                else
+                {
+                    _console.MarkupLine($"[yellow]Warning: Could not write report to '{Markup.Escape(reportPath)}': {Markup.Escape(ex.Message)}[/]");
+                }
+            }
+        }
+
         switch (options.Output.ToLowerInvariant())
         {
             case "json":
@@ -154,10 +196,11 @@ public class DiffCommandHandler
                 break;
             case "console":
             default:
-                DiffConsoleRenderer.RenderConsole(diff, _console, options.Detailed);
+                DiffConsoleRenderer.RenderConsole(diff, _console, options.Detailed,
+                    maxTables: writtenReportPath != null ? 15 : 0, reportPath: writtenReportPath);
                 break;
         }
 
-        return 0;
+        return explicitReport && reportFailed ? 1 : 0;
     }
 }

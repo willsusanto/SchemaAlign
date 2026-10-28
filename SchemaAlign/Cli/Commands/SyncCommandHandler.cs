@@ -110,6 +110,11 @@ public class SyncCommandOptions
     /// Table prefixes to strip when matching foreign key columns and generating navigation properties (e.g. "ms", "lt", "tr").
     /// </summary>
     public List<string> TablePrefixes { get; set; } = new();
+
+    /// <summary>
+    /// Path to export a markdown sync report to.
+    /// </summary>
+    public string? ReportPath { get; set; }
 }
 
 /// <summary>
@@ -244,6 +249,30 @@ public class SyncCommandHandler
         // Calculate diff: Current (base) -> Target (desired state)
         var diff = SchemaDiffCalculator.Calculate(currentSchema, targetSchema, diffOptions);
 
+        var reportPath = options.ReportPath;
+        var explicitReport = !string.IsNullOrWhiteSpace(reportPath);
+        string? writtenReportPath = null;
+        if (string.IsNullOrWhiteSpace(reportPath) && diff.HasChanges && diff.Tables.Count(t => t.HasChanges) > 15)
+        {
+            reportPath = Path.Combine(".schemaalign", "sync_report.md");
+        }
+
+        var fullDiff = diff;
+        if (!string.IsNullOrWhiteSpace(reportPath))
+        {
+            try
+            {
+                MarkdownReportWriter.Write(reportPath, fullDiff, "Schema Sync Report", options.Current, options.Target);
+                writtenReportPath = reportPath;
+            }
+            catch (Exception ex)
+            {
+                _console.MarkupLine($"[yellow]Warning: Could not write report to '{Markup.Escape(reportPath)}': {Markup.Escape(ex.Message)}[/]");
+                if (explicitReport)
+                    return 1;
+            }
+        }
+
         if (!diff.HasChanges)
         {
             _console.MarkupLine("[green]✔ Current schema is already aligned with desired target. No changes needed.[/]");
@@ -251,7 +280,8 @@ public class SyncCommandHandler
         }
 
         // Print initial diff table
-        DiffConsoleRenderer.RenderConsole(diff, _console, detailed: false);
+        DiffConsoleRenderer.RenderConsole(diff, _console, detailed: false,
+            maxTables: writtenReportPath != null ? 15 : 0, reportPath: writtenReportPath);
 
         var hasDestructive = DiffFilter.HasDestructiveChanges(diff);
         if (hasDestructive)
@@ -359,7 +389,27 @@ public class SyncCommandHandler
 
         // Preview
         var previews = await applier.PreviewAsync(diff, applierOptions, cancellationToken);
-        PreviewConsoleRenderer.RenderPreviews(previews, _console);
+
+        var previewReportFailed = false;
+        string? previewReportPath = null;
+        if (!string.IsNullOrWhiteSpace(reportPath))
+        {
+            try
+            {
+                MarkdownReportWriter.Write(reportPath, fullDiff, "Schema Sync Report", options.Current, options.Target, previews);
+                previewReportPath = reportPath;
+            }
+            catch (Exception ex)
+            {
+                _console.MarkupLine($"[yellow]Warning: Could not write report to '{Markup.Escape(reportPath)}': {Markup.Escape(ex.Message)}[/]");
+                previewReportFailed = true;
+            }
+        }
+
+        PreviewConsoleRenderer.RenderPreviews(previews, _console, maxDetailedPanels: 3, reportPath: previewReportPath);
+
+        if (explicitReport && previewReportFailed)
+            return 1;
 
         if (options.DryRun)
         {

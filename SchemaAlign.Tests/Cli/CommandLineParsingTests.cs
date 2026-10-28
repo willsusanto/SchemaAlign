@@ -299,6 +299,44 @@ public class CommandLineParsingTests
         capturedOptions.OutputFile.Should().Be("./migration.sql");
     }
 
+    [Fact]
+    public async Task DiffCommand_ParsesReportFlag()
+    {
+        DiffCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestDiffHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(diffHandler: mockHandler);
+        var exitCode = await root.Parse("diff -c schema.mmd -t ./Entities -r reports/diff.md").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.ReportPath.Should().Be("reports/diff.md");
+    }
+
+    [Fact]
+    public async Task SyncCommand_ParsesReportFlag()
+    {
+        SyncCommandOptions? capturedOptions = null;
+
+        var mockHandler = new TestSyncHandler(opts =>
+        {
+            capturedOptions = opts;
+            return Task.FromResult(0);
+        });
+
+        var root = CommandLineConfiguration.CreateRootCommand(syncHandler: mockHandler);
+        var exitCode = await root.Parse("sync -c schema.mmd -t ./Entities --report reports/sync.md -y").InvokeAsync();
+
+        exitCode.Should().Be(0);
+        capturedOptions.Should().NotBeNull();
+        capturedOptions!.ReportPath.Should().Be("reports/sync.md");
+    }
+
     private class TestDiffHandler : DiffCommandHandler
     {
         private readonly Func<DiffCommandOptions, Task<int>> _action;
