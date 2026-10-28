@@ -47,6 +47,98 @@ public class SyncWorkflowTests
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_AllJsonConventions_ReachCSharpGeneration(bool enabled)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "SchemaAlign_MaskedConventions_" + Guid.NewGuid().ToString("N"));
+        var entities = Path.Combine(directory, "Masked.Entities");
+        Directory.CreateDirectory(entities);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(directory, "masked.mmd"),
+                "erDiagram\n    MaskedRecord {\n        int MaskedKey PK\n        string MaskedStamp\n        string MaskedIgnored\n    }");
+            await File.WriteAllTextAsync(Path.Combine(directory, "MaskedBase.cs"),
+                "namespace Masked.Core; public abstract class MaskedBase { public string MaskedStamp { get; set; } }");
+            var json = $$"""
+                { "current":"Masked.Entities;MaskedBase.cs", "target":"masked.mmd", "tablePrefixes":["masked_"],
+                  "csharp": { "namespace":"Masked.Output", "baseClass":"MaskedBase",
+                    "usings":["Masked.Core","using Masked.Core;"],
+                    "classAttributes":["MaskedMarker","[MaskedMarker]"],
+                    "omitInheritedColumns":["MaskedIgnored"],
+                    "useFileScopedNamespaces":{{enabled.ToString().ToLowerInvariant()}},
+                    "useDataAnnotations":{{enabled.ToString().ToLowerInvariant()}},
+                    "foreignKeyPlacement":"scalar" } }
+                """;
+            var path = Path.Combine(directory, ".schemaalign.json");
+            await File.WriteAllTextAsync(path, json);
+            var console = new TestConsole();
+            var handler = new SyncCommandHandler(console: console);
+
+            var result = await handler.RunAsync(new SyncCommandOptions { ConfigFile = path, Yes = true, Interactive = false });
+
+            result.Should().Be(0, console.Output);
+            var generated = await File.ReadAllTextAsync(Path.Combine(entities, "MaskedRecord.cs"));
+            generated.Should().Contain("public class MaskedRecord : MaskedBase");
+            generated.Should().NotContain("public string MaskedStamp").And.NotContain("MaskedIgnored");
+            generated.Contains("namespace Masked.Output;", StringComparison.Ordinal).Should().Be(enabled);
+            generated.Contains("[Key]", StringComparison.Ordinal).Should().Be(enabled);
+            System.Text.RegularExpressions.Regex.Matches(generated, @"using Masked.Core;").Count.Should().Be(1);
+            System.Text.RegularExpressions.Regex.Matches(generated, @"\[MaskedMarker\]").Count.Should().Be(1);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GuidedSnapshot_ShowsChangesBeforeRequestingDropPermission(bool allowDrops)
+    {
+        var console = new TestConsole().Interactive();
+        console.Profile.Width = 240;
+        console.Input.PushTextWithEnter(allowDrops ? "y" : "n");
+        if (allowDrops)
+        {
+            console.Input.PushKey(ConsoleKey.Enter); // Select the permitted drop.
+            console.Input.PushKey(ConsoleKey.Enter); // Finish preview.
+        }
+        var applier = new MockApplier();
+        var registry = new ApplierRegistry();
+        registry.Register(TargetType.CSharp, applier);
+        var current = new DatabaseSchema();
+        current.AddTable(new TableSchema { Name = "MaskedPrior" });
+        var options = new SyncCommandOptions { Current = "Masked.Entities", Mode = "snapshot", Guided = true };
+
+        var result = await new SyncCommandHandler(registry, console: console)
+            .ExecuteAsync(current, new DatabaseSchema(), options, TargetType.CSharp);
+
+        result.Should().Be(0);
+        options.AllowDrop.Should().Be(allowDrops);
+        applier.ApplyCalled.Should().BeFalse();
+        console.Output.IndexOf("Include destructive removals", StringComparison.Ordinal).Should()
+            .BeGreaterThan(console.Output.IndexOf("MaskedPrior", StringComparison.Ordinal));
+    }
+    [Fact]
+    public async Task ExecuteSync_ConnectionString_IsPassedIntactToSqlApplier()
+    {
+        const string connection = "User ID=masked-user;Password=masked-secret;Server=masked-host;Database=masked-store;";
+        var console = new TestConsole();
+        var applier = new MockApplier();
+        var registry = new ApplierRegistry();
+        registry.Register(TargetType.SqlServerDatabase, applier);
+        var desired = new DatabaseSchema();
+        desired.AddTable(new TableSchema { Name = "MaskedRecord" });
+
+        var result = await new SyncCommandHandler(registry, console: console).ExecuteAsync(
+            new DatabaseSchema(), desired,
+            new SyncCommandOptions { Current = connection, Interactive = false, Yes = true, DryRun = true },
+            TargetType.SqlServerDatabase);
+
+        result.Should().Be(0);
+        ((SchemaAlign.Appliers.SqlServer.SqlServerApplierOptions)applier.LastOptionsUsed!).ConnectionString.Should().Be(connection);
+        console.Output.Should().NotContain("masked-secret").And.NotContain("masked-user");
+    }
     [Fact]
     public async Task ExecuteSync_DryRun_CallsPreviewButNotApply()
     {
@@ -396,10 +488,10 @@ public class SyncWorkflowTests
         {
             var configJson = """
                 {
-                  "tablePrefixes": ["tbl_"],
+                  "tablePrefixes": ["tbl_", "px_"],
                   "csharp": {
-                    "foreignKeyPlacement": "scalar",
-                    "tablePrefixes": ["px_"]
+                    "foreignKeyPlacement": "scalar"
+
                   }
                 }
                 """;

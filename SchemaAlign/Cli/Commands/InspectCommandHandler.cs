@@ -19,6 +19,7 @@ public class InspectCommandOptions
     /// Output format ('console' or 'json').
     /// </summary>
     public string Output { get; set; } = "console";
+    public List<string> TablePrefixes { get; set; } = new();
 }
 
 /// <summary>
@@ -51,7 +52,7 @@ public class InspectCommandHandler
 
         try
         {
-            var schema = await _detectionService.ReadSchemaAsync(options.Current, cancellationToken);
+            var schema = await _detectionService.ReadSchemaAsync(options.Current, new SchemaAlign.Readers.Mermaid.MermaidReaderOptions { TablePrefixes = options.TablePrefixes }, cancellationToken);
 
             switch (options.Output.ToLowerInvariant())
             {

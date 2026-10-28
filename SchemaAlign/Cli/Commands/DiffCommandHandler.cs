@@ -76,47 +76,34 @@ public class DiffCommandHandler
     /// <returns>Exit code (0 for success, non-zero for error).</returns>
     public virtual async Task<int> RunAsync(DiffCommandOptions options, CancellationToken cancellationToken = default)
     {
-        // Load config if specified or find in current directory
-        var config = !string.IsNullOrWhiteSpace(options.ConfigFile)
-            ? await ConfigurationLoader.LoadAsync(options.ConfigFile, cancellationToken)
-            : await ConfigurationLoader.FindAndLoadAsync(cancellationToken: cancellationToken);
-
-        if (config != null)
-        {
-            if (string.IsNullOrWhiteSpace(options.Current) && !string.IsNullOrWhiteSpace(config.Current ?? config.Source))
-                options.Current = (config.Current ?? config.Source)!;
-            if (string.IsNullOrWhiteSpace(options.Target) && !string.IsNullOrWhiteSpace(config.Target))
-                options.Target = config.Target;
-            if (string.Equals(options.Mode, "incremental", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(config.Mode))
-                options.Mode = config.Mode;
-            if (string.Equals(options.Output, "console", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(config.Output))
-                options.Output = config.Output;
-            if (!options.Detailed && config.Detailed.HasValue)
-                options.Detailed = config.Detailed.Value;
-
-            var configPrefixes = (config.TablePrefixes ?? Enumerable.Empty<string>())
-                .Concat(config.CSharp?.TablePrefixes ?? Enumerable.Empty<string>());
-            foreach (var p in configPrefixes)
-            {
-                if (!options.TablePrefixes.Contains(p, StringComparer.OrdinalIgnoreCase))
-                    options.TablePrefixes.Add(p);
-            }
-        }
-
-        if (string.IsNullOrWhiteSpace(options.Current))
-        {
-            _console.MarkupLine("[red]Error: Current schema path (-c|--current) is required.[/]");
-            return 1;
-        }
-
-        if (string.IsNullOrWhiteSpace(options.Target))
-        {
-            _console.MarkupLine("[red]Error: Target schema path (-t|--target) is required.[/]");
-            return 1;
-        }
-
         try
         {
+            // Load exactly one project configuration.
+            var config = !string.IsNullOrWhiteSpace(options.ConfigFile)
+                ? await ConfigurationLoader.LoadAsync(options.ConfigFile, cancellationToken)
+                : await ConfigurationLoader.FindAndLoadAsync(cancellationToken: cancellationToken);
+
+            if (config != null)
+            {
+                if (string.IsNullOrWhiteSpace(options.Current) && !string.IsNullOrWhiteSpace(config.Current))
+                    options.Current = config.Current;
+                if (string.IsNullOrWhiteSpace(options.Target) && !string.IsNullOrWhiteSpace(config.Target))
+                    options.Target = config.Target;
+                if (options.TablePrefixes.Count == 0) options.TablePrefixes = config.TablePrefixes.ToList();
+            }
+
+            if (string.IsNullOrWhiteSpace(options.Current))
+            {
+                _console.MarkupLine("[red]Error: Current schema path (-c|--current) is required.[/]");
+                return 1;
+            }
+
+            if (string.IsNullOrWhiteSpace(options.Target))
+            {
+                _console.MarkupLine("[red]Error: Target schema path (-t|--target) is required.[/]");
+                return 1;
+            }
+
             var mermaidOptions = options.TablePrefixes.Count > 0
                 ? new MermaidReaderOptions { TablePrefixes = options.TablePrefixes.ToList() }
                 : null;
@@ -184,6 +171,9 @@ public class DiffCommandHandler
                 }
             }
         }
+
+        if (!machineOutput)
+            ComparisonSetupRenderer.Render(_console, options.Current, options.Target, options.Mode, sync: false);
 
         switch (options.Output.ToLowerInvariant())
         {

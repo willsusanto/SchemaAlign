@@ -13,6 +13,24 @@ public class CSharpEntityApplierTests
 {
     private readonly CSharpEntityApplier _applier = new();
 
+    [Theory]
+    [InlineData("MaskedRecord")]
+    [InlineData("MaskedAlternate")]
+    public void GenerateEntitySource_CustomTableAttribute_DoesNotDuplicateAutomaticMapping(string mappedName)
+    {
+        var table = new TableSchema { Name = "MaskedRecord" };
+        table.AddColumn(new ColumnSchema { Name = "MaskedKey", Type = StandardType.Int });
+        var options = new CSharpApplierOptions
+        {
+            ClassAttributes = new List<string> { $"[Table(\"{mappedName}\")]", "MaskedMarker", "[MaskedMarker]" }
+        };
+
+        var generated = new CSharpEntityApplier().GenerateEntitySource(table, options);
+
+        System.Text.RegularExpressions.Regex.Matches(generated, @"\[Table\(").Count.Should().Be(1);
+        System.Text.RegularExpressions.Regex.Matches(generated, @"\[MaskedMarker\]").Count.Should().Be(1);
+        generated.Should().Contain($"[Table(\"{mappedName}\")]");
+    }
     [Fact]
     public void ApplyToSource_AddingNewColumn_AppendsPropertyPreservingFormattingAndExistingMembers()
     {
@@ -1580,6 +1598,3 @@ public class CSharpEntityApplierTests
         generatedCode.Should().Contain("public virtual TblMaskedParent? Parent { get; set; }");
     }
 }
-
-
-
