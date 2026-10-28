@@ -18,7 +18,9 @@ Universal database and entity schema alignment tool for .NET. SchemaAlign parses
 
 ## CLI Usage
 
-Run `SchemaAlign` with no arguments to start the interactive console wizard:
+Run `SchemaAlign` with no arguments to start the interactive console wizard.
+
+The wizard checks local schema files and C# entity directories immediately after entry and asks again if a path is missing or unsupported. Every entry in a multi-path C# input is checked. Relative paths use the working directory displayed by the wizard; surrounding quotes and whitespace are accepted. SQL Server connection strings bypass filesystem validation; database connectivity is checked when the schema is read.
 
 ```bash
 dotnet run --project SchemaAlign

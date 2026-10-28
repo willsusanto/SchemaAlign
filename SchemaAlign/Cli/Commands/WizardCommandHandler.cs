@@ -50,14 +50,16 @@ public class WizardCommandHandler
         if (action.StartsWith("4"))
             return 0;
 
+        _console.MarkupLine($"[grey]Relative paths start from: {Markup.Escape(Directory.GetCurrentDirectory())}[/]");
+
         if (action.StartsWith("3"))
         {
-            var current = _console.Ask<string>("[bold]Enter schema path (e.g. schema.mmd, ./Entities, or script.sql):[/]");
+            var current = AskSchemaInput("[bold]Enter schema path (e.g. schema.mmd, ./Entities, or script.sql):[/]");
             return await _inspectHandler.RunAsync(new InspectCommandOptions { Current = current }, cancellationToken);
         }
 
-        var currentPath = _console.Ask<string>("[bold]Enter Current schema path (e.g. ./src/Entities or live DB):[/]");
-        var targetPath = _console.Ask<string>("[bold]Enter Desired target schema path (e.g. schema.mmd or new spec):[/]");
+        var currentPath = AskSchemaInput("[bold]Enter Current schema path (e.g. ./src/Entities or live DB):[/]");
+        var targetPath = AskSchemaInput("[bold]Enter Desired target schema path (e.g. schema.mmd or new spec):[/]");
 
         var modeChoice = _console.Prompt(
             new SelectionPrompt<string>()
@@ -97,5 +99,21 @@ public class WizardCommandHandler
         }
 
         return 0;
+    }
+
+    private string AskSchemaInput(string prompt)
+    {
+        while (true)
+        {
+            var input = _console.Ask<string>(prompt);
+            try
+            {
+                return SchemaInputValidator.ValidateAndNormalize(input);
+            }
+            catch (ArgumentException ex)
+            {
+                _console.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
+            }
+        }
     }
 }
