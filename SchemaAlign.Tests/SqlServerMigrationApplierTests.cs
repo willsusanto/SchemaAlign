@@ -121,7 +121,7 @@ public class SqlServerMigrationApplierTests
         var script = _applier.GenerateMigrationScript(diff);
 
         // Assert
-        script.Should().Contain("IF OBJECT_ID(N'[dbo].[tbl_masked_sample]', N'U') IS NULL");
+        script.Should().Contain("IF OBJECT_ID(N''[dbo].[tbl_masked_sample]'', N''U'') IS NULL");
         script.Should().Contain("CREATE TABLE [dbo].[tbl_masked_sample]");
         script.Should().Contain("[ColId] BIGINT IDENTITY(1,1) NOT NULL");
         script.Should().Contain("[ColString] NVARCHAR(150) NOT NULL");
@@ -209,7 +209,7 @@ public class SqlServerMigrationApplierTests
         var script = _applier.GenerateMigrationScript(diff);
 
         // Assert
-        script.Should().Contain("IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[tbl_masked_entity]') AND name = N'ColNew')");
+        script.Should().Contain("IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N''[dbo].[tbl_masked_entity]'') AND name = N''ColNew'')");
         script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_entity] ADD [ColNew] NVARCHAR(80) NULL;");
         script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_entity] ALTER COLUMN [ColMod] BIGINT NOT NULL;");
         script.Should().NotContain("sp_addextendedproperty");
@@ -264,10 +264,10 @@ public class SqlServerMigrationApplierTests
         var script = _applier.GenerateMigrationScript(diff);
 
         // Assert — must include a DEFAULT clause when adding a NOT NULL column to prevent SQL Server Msg 4901 on non-empty tables
-        script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedStringReq] NVARCHAR(36) NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedStringReq] DEFAULT ('');");
+        script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedStringReq] NVARCHAR(36) NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedStringReq] DEFAULT ('''');");
         script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedIntReq] INT NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedIntReq] DEFAULT ((0));");
         script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedBitReq] BIT NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedBitReq] DEFAULT ((0));");
-        script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedDateReq] DATETIME2 NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedDateReq] DEFAULT ('1900-01-01');");
+        script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedDateReq] DATETIME2 NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedDateReq] DEFAULT (''1900-01-01'');");
     }
 
     [Fact]
@@ -306,7 +306,7 @@ public class SqlServerMigrationApplierTests
 
         // Assert
         script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedCustomDef] INT NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedCustomDef] DEFAULT ((42));");
-        script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedGuidReq] UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedGuidReq] DEFAULT ('00000000-0000-0000-0000-000000000000');");
+        script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_existing] ADD [ColMaskedGuidReq] UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_tbl_masked_existing_ColMaskedGuidReq] DEFAULT (''00000000-0000-0000-0000-000000000000'');");
     }
 
     [Fact]
@@ -357,10 +357,10 @@ public class SqlServerMigrationApplierTests
         var script = _applier.GenerateMigrationScript(diff);
 
         // Assert
-        script.Should().Contain("IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_tbl_masked_child_parent')");
+        script.Should().Contain("IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N''FK_tbl_masked_child_parent'')");
         script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_child] ADD CONSTRAINT [FK_tbl_masked_child_parent] FOREIGN KEY ([ParentId]) REFERENCES [dbo].[tbl_masked_parent] ([Id]);");
 
-        script.Should().Contain("IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_tbl_masked_child_old')");
+        script.Should().Contain("IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N''FK_tbl_masked_child_old'')");
         script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_child] DROP CONSTRAINT [FK_tbl_masked_child_old];");
     }
 
@@ -440,9 +440,9 @@ public class SqlServerMigrationApplierTests
         var script = _applier.GenerateMigrationScript(diff, options);
 
         // Assert
-        script.Should().Contain("IF OBJECT_ID(N'[dbo].[tbl_masked_obsolete]', N'U') IS NOT NULL");
+        script.Should().Contain("IF OBJECT_ID(N''[dbo].[tbl_masked_obsolete]'', N''U'') IS NOT NULL");
         script.Should().Contain("DROP TABLE [dbo].[tbl_masked_obsolete];");
-        script.Should().Contain("IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[tbl_masked_active]') AND name = N'ColDeleted')");
+        script.Should().Contain("IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N''[dbo].[tbl_masked_active]'') AND name = N''ColDeleted'')");
         script.Should().Contain("ALTER TABLE [dbo].[tbl_masked_active] DROP COLUMN [ColDeleted];");
     }
 

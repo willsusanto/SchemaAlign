@@ -119,4 +119,8 @@ SQL migration generation includes guards for common dependency and repeat-execut
 - Primary-key resolution uses available schema information instead of assuming every key is named Id.
 - Configured prefixes help resolve convention-based foreign-key names.
 
+Transactional exports run as one batch with `XACT_ABORT`, `TRY/CATCH`, rollback, and rethrow. Individual DDL operations retain separate compilation and variable scopes through `sp_executesql`. A failed operation rolls back the migration and prevents later operations or commit from running. Direct live execution instead uses one transaction owned by the SQL executor.
+
+After a failed script from an older version, inspect the database and generate a fresh comparison before retrying; earlier statements may have applied depending on session transaction settings and how the script was executed. A foreign-key conflict can indicate incorrect inferred relationships, not just missing parent rows. Correct the schema mapping rather than bypassing constraint validation.
+
 The wizard lets you export a script or explicitly confirm direct live execution. Selecting snapshot defines which removals are reported; permission and selection still control which are included in synchronization.

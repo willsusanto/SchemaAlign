@@ -28,12 +28,36 @@ public static class SqlServerMigrationGenerator
             sb.AppendLine();
         }
 
-        if (options.Transactional)
+        var operations = GenerateOperationScript(diff, options);
+        if (!options.Transactional)
         {
-            sb.AppendLine("BEGIN TRANSACTION;");
-            sb.AppendLine("GO");
-            sb.AppendLine();
+            sb.Append(operations);
+            return sb.ToString();
         }
+
+        sb.AppendLine("SET XACT_ABORT ON;");
+        sb.AppendLine("BEGIN TRY");
+        sb.AppendLine("    BEGIN TRANSACTION;");
+        foreach (var batch in SplitIntoBatches(operations))
+        {
+            // Separate compilation and variable scopes preserve the original GO batches.
+            // Errors in a dynamic batch are caught by the outer transaction handler.
+            sb.AppendLine($"    EXEC sys.sp_executesql N'{EscapeSql(batch)}';");
+        }
+        sb.AppendLine("    COMMIT TRANSACTION;");
+        sb.AppendLine("END TRY");
+        sb.AppendLine("BEGIN CATCH");
+        sb.AppendLine("    IF XACT_STATE() <> 0");
+        sb.AppendLine("        ROLLBACK TRANSACTION;");
+        sb.AppendLine("    THROW;");
+        sb.AppendLine("END CATCH;");
+        sb.AppendLine("GO");
+        return sb.ToString();
+    }
+
+    internal static string GenerateOperationScript(SchemaDiff diff, SqlServerApplierOptions options)
+    {
+        var sb = new StringBuilder();
 
         // 1. Drop Foreign Keys (if modified/deleted)
         GenerateDropForeignKeys(diff, options, sb);
@@ -52,12 +76,6 @@ public static class SqlServerMigrationGenerator
 
         // 6. Add / Update Foreign Keys
         GenerateAddForeignKeys(diff, options, sb);
-
-        if (options.Transactional)
-        {
-            sb.AppendLine("COMMIT TRANSACTION;");
-            sb.AppendLine("GO");
-        }
 
         return sb.ToString();
     }

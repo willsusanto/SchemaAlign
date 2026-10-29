@@ -86,6 +86,6 @@ Root tablePrefixes helps match foreign keys when table names use conventions suc
 
 For new entities, data annotations include `[Required]` on non-nullable, non-key strings, including foreign-key strings. This preserves required fields in projects with nullable reference types disabled.
 
-Mermaid foreign-key matching recognizes role suffixes such as `IdMaskedActorOpen` referencing `IdMaskedActor`. Columns marked `FK` can produce references without a drawn relationship when their key name identifies exactly one principal table. Ambiguous or generic `Id` keys require explicit relationship lines labeled with the dependent column name.
+Mermaid foreign-key matching recognizes role suffixes such as `IdMaskedActorOpen` referencing `IdMaskedActor`. For columns marked `FK` without their own drawn relationship, exact key names take precedence and must identify exactly one principal table. Role suffixes require an existing drawn relationship between the same tables; sharing a prefix alone does not establish a reference. Include missing lookup entities and explicit relationship lines labeled with the dependent column name when inference is ambiguous or the principal uses a generic `Id` key.
 
 **Existing files:** Roslyn-based property rewrites preserve surrounding methods, comments, and formatting. This is not a general class-restyling operation. C# CLI synchronization currently adds and updates properties; it does not apply every reported property or entity-file removal. Inspect the previews to see the operations supported for your destination.

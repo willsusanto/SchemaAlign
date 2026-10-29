@@ -165,7 +165,8 @@ public class SqlServerMigrationApplier : ISchemaApplier
 
             if (!string.IsNullOrWhiteSpace(connString))
             {
-                var script = GenerateMigrationScript(diff, sqlOptions);
+                // The executor owns the live transaction; exported scripts own theirs.
+                var script = SqlServerMigrationGenerator.GenerateOperationScript(diff, sqlOptions);
                 var batches = SqlServerMigrationGenerator.SplitIntoBatches(script);
 
                 await _executor.ExecuteBatchesAsync(connString, batches, sqlOptions.Transactional, cancellationToken);
