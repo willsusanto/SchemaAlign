@@ -211,8 +211,42 @@ public class MermaidSchemaReader : ISchemaReader
             ParseRelationshipLine(match, schema);
         }
 
+        // FK markers may describe additional roles or references without a drawn edge.
+        foreach (var dependent in schema.Tables.Values)
+        {
+            foreach (var column in dependent.Columns.Values.Where(c => c.IsForeignKey && !c.IsPrimaryKey))
+            {
+                if (dependent.ForeignKeys.Any(f => f.DependentColumn.Equals(column.Name, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var candidates = schema.Tables.Values
+                    .Where(t => t.PrimaryKeys.Count() == 1)
+                    .Select(t => (Table: t, Key: t.PrimaryKeys.Single()))
+                    .Where(p => MatchesKeyRole(column.Name, p.Key))
+                    .ToList();
+                // Never choose between ambiguous principal tables.
+                if (candidates.Count != 1) continue;
+                var principal = candidates[0];
+                dependent.AddForeignKey(new ForeignKeySchema
+                {
+                    ConstraintName = $"FK_{dependent.Name}_{principal.Table.Name}_{column.Name}",
+                    PrincipalTable = principal.Table.Name,
+                    PrincipalColumn = principal.Key,
+                    DependentTable = dependent.Name,
+                    DependentColumn = column.Name,
+                    Cardinality = ForeignKeyCardinality.ManyToOne
+                });
+            }
+        }
+
         return schema;
     }
+
+    private static bool MatchesKeyRole(string column, string key) =>
+        !key.Equals("Id", StringComparison.OrdinalIgnoreCase) &&
+        (column.Equals(key, StringComparison.OrdinalIgnoreCase) ||
+         (column.StartsWith(key, StringComparison.OrdinalIgnoreCase) && column.Length > key.Length &&
+          (char.IsUpper(column[key.Length]) || column[key.Length] == '_')));
 
     /// <summary>
     /// Reads and parses a database schema from a Mermaid ER diagram file.
@@ -599,6 +633,15 @@ public class MermaidSchemaReader : ISchemaReader
             {
                 return col.Name;
             }
+        }
+
+        // Prefer role-qualified keys over unrelated columns marked FK.
+        if (!string.IsNullOrWhiteSpace(principalPk))
+        {
+            var roleColumn = dependentTable.Columns.Values.FirstOrDefault(c =>
+                c.IsForeignKey && !c.IsPrimaryKey && MatchesKeyRole(c.Name, principalPk) &&
+                !dependentTable.ForeignKeys.Any(f => f.DependentColumn.Equals(c.Name, StringComparison.OrdinalIgnoreCase)));
+            if (roleColumn != null) return roleColumn.Name;
         }
 
         // 4. Look for unused column explicitly marked as FK in Mermaid definition
