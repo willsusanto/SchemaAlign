@@ -214,6 +214,7 @@ public class MermaidSchemaReader : ISchemaReader
         // FK markers may describe additional roles or references without a drawn edge.
         foreach (var dependent in schema.Tables.Values)
         {
+            var declaredForeignKeys = dependent.ForeignKeys.ToArray();
             foreach (var column in dependent.Columns.Values.Where(c => c.IsForeignKey && !c.IsPrimaryKey))
             {
                 if (dependent.ForeignKeys.Any(f => f.DependentColumn.Equals(column.Name, StringComparison.OrdinalIgnoreCase)))
@@ -222,8 +223,12 @@ public class MermaidSchemaReader : ISchemaReader
                 var candidates = schema.Tables.Values
                     .Where(t => t.PrimaryKeys.Count() == 1)
                     .Select(t => (Table: t, Key: t.PrimaryKeys.Single()))
-                    .Where(p => MatchesKeyRole(column.Name, p.Key))
+                    .Where(p => column.Name.Equals(p.Key, StringComparison.OrdinalIgnoreCase) ||
+                        (MatchesKeyRole(column.Name, p.Key) && declaredForeignKeys.Any(f =>
+                            f.PrincipalTable.Equals(p.Table.Name, StringComparison.OrdinalIgnoreCase))))
                     .ToList();
+                var exactMatches = candidates.Where(p => column.Name.Equals(p.Key, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (exactMatches.Count > 0) candidates = exactMatches;
                 // Never choose between ambiguous principal tables.
                 if (candidates.Count != 1) continue;
                 var principal = candidates[0];
