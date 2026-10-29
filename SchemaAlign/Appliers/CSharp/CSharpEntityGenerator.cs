@@ -240,6 +240,11 @@ public static class CSharpEntityGenerator
                     sb.AppendLine($"{memberIndent}[Key]");
                 }
 
+                if (col.Type == StandardType.String && !col.IsNullable && !col.IsPrimaryKey)
+                {
+                    sb.AppendLine($"{memberIndent}[Required]");
+                }
+
                 if (col.IsIdentity)
                 {
                     sb.AppendLine($"{memberIndent}[DatabaseGenerated(DatabaseGeneratedOption.Identity)]");
